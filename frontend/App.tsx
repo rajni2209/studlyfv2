@@ -1,10 +1,12 @@
 // Studlyf Engineering Protocol - Core Routing Engine
-import React, { Suspense, useEffect, lazy, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { HashRouter as Router, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 
+// Core components
+import Navigation from './components/Navigation';
+
 // Lazy-loaded components (code-split)
-const Navigation = lazy(() => import('./components/Navigation'));
 const Footer = lazy(() => import('./components/Footer'));
 const EnquiryForm = lazy(() => import('./components/EnquiryForm'));
 const ResourceCenter = lazy(() => import('./components/ResourceCenter'));
@@ -21,7 +23,7 @@ import PublicRoute from './PublicRoute';
 import { HeroUIProvider } from "@heroui/react";
 
 // Lazy-loaded pages (code-split per route)
-import Home from './pages/Home';
+const Home = lazy(() => import('./pages/Home'));
 const CourseDetail = lazy(() => import('./pages/CourseDetail'));
 const CareerFit = lazy(() => import('./pages/CareerFit'));
 const Assessment = lazy(() => import('./pages/Assessment'));
@@ -38,12 +40,12 @@ const GroupDiscussion = lazy(() => import('./pages/GroupDiscussion'));
 const PlayLearnEarn = lazy(() => import('./pages/PlayLearnEarn'));
 const GoalSelector = lazy(() => import('./pages/GoalSelector'));
 const About = lazy(() => import('./pages/About'));
-import UnifiedAuth from './pages/UnifiedAuth';
+const UnifiedAuth = lazy(() => import('./pages/UnifiedAuth'));
 const JudgeInvitation = lazy(() => import('./pages/JudgeInvitation'));
-import LearnerDashboard from './pages/LearnerDashboard';
+const LearnerDashboard = lazy(() => import('./pages/LearnerDashboard'));
 const JoinTeamPage = lazy(() => import('./pages/events/JoinTeam'));
-import PartnerDashboard from './pages/PartnerDashboard';
-import DashboardHome from './pages/DashboardHome';
+const PartnerDashboard = lazy(() => import('./pages/PartnerDashboard'));
+const DashboardHome = lazy(() => import('./pages/DashboardHome'));
 const Blog = lazy(() => import('./pages/Blog'));
 const CompanyModules = lazy(() => import('./pages/CompanyModules'));
 const ResumeBuilder = lazy(() => import('./pages/ResumeBuilder'));
@@ -67,12 +69,12 @@ const StudHub = lazy(() => import('./pages/StudHub'));
 const StudentDiscounts = lazy(() => import('./pages/StudentDiscounts'));
 const StudentSchemes = lazy(() => import('./pages/StudentSchemes'));
 const FeaturePreview = lazy(() => import('./pages/FeaturePreview'));
-import InstitutionDashboard from './pages/institution-dashboard/InstitutionDashboard';
+const InstitutionDashboard = lazy(() => import('./pages/institution-dashboard/InstitutionDashboard'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const RoadmapClone = lazy(() => import('./pages/RoadmapClone'));
-import OpportunitiesList from './pages/opportunities/OpportunitiesList';
+const OpportunitiesList = lazy(() => import('./pages/opportunities/OpportunitiesList'));
 const OpportunityDetails = lazy(() => import('./pages/opportunities/OpportunityDetails'));
 const ResultsPage = lazy(() => import('./pages/opportunities/ResultsPage'));
 const MyApplications = lazy(() => import('./pages/opportunities/MyApplications'));

@@ -1,0 +1,34 @@
+{
+  "name": "Your Name",
+  "email": "email@example.com",
+  "summary": "Professional summary goes here.",
+  "skills": [
+    "Skill 1",
+    "Skill 2"
+  ],
+  "experience": [
+    {
+      "company": "",
+      "role": "",
+      "year": "",
+      "details": ""
+    }
+  ],
+  "projects": [
+    {
+      "name": "",
+      "description": "",
+      "technologies": "",
+      "link": ""
+    }
+  ],
+  "certifications": [
+    {
+      "name": "",
+      "issuer": "",
+      "date": "",
+      "link": ""
+    }
+  ],
+  "template_id": "neon_glass"
+}

@@ -10,7 +10,7 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       host: '0.0.0.0',
       proxy: {
-        '^/api/.*': {
+        '^/(api/.*|generate-portfolio(?:/.*)?|generate-resume(?:/.*)?|update-portfolio(?:/.*)?|generate-summary(?:/.*)?)': {
           target: env.VITE_API_PROXY || 'http://localhost:8000',
           changeOrigin: true,
           secure: false,
@@ -24,11 +24,27 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (id.includes('node_modules')) {
-              return 'vendor';
+            if (!id.includes('node_modules')) {
+              if (id.includes('CoursePlayer')) return 'chunk-course-player';
+              if (id.includes('OperationLog')) return 'chunk-operation-log';
+              return undefined;
             }
-            if (id.includes('CoursePlayer')) return 'chunk-course-player';
-            if (id.includes('OperationLog')) return 'chunk-operation-log';
+
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) return 'vendor_react';
+            if (id.includes('node_modules/react-router-dom') || id.includes('node_modules/react-router')) return 'vendor_router';
+            if (id.includes('node_modules/framer-motion')) return 'vendor_framer-motion';
+            if (id.includes('node_modules/lucide-react') || id.includes('node_modules/react-icons')) return 'vendor_icons';
+            if (id.includes('node_modules/@heroui')) return 'vendor_heroui';
+            if (id.includes('node_modules/html2pdf.js') || id.includes('node_modules/html2canvas') || id.includes('node_modules/jspdf')) return 'vendor_pdf';
+            if (id.includes('node_modules/pdfjs-dist')) return 'vendor_pdfjs';
+            if (id.includes('node_modules/three') || id.includes('node_modules/@react-three')) return 'vendor_three';
+            if (id.includes('node_modules/react-markdown') || id.includes('node_modules/remark-gfm') || id.includes('node_modules/rehype-raw')) return 'vendor_markdown';
+            if (id.includes('node_modules/lottie-react')) return 'vendor_lottie';
+            if (id.includes('node_modules/qrcode')) return 'vendor_qrcode';
+            if (id.includes('node_modules/react-syntax-highlighter')) return 'vendor_syntax';
+            if (id.includes('node_modules/react-helmet-async')) return 'vendor_helmet';
+
+            return 'vendor_misc';
           }
         }
       }

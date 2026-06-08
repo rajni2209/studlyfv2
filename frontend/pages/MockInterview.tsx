@@ -44,6 +44,7 @@ interface UserResponse {
     answer: string;
     suggestion: string;
     wordCount: number;
+    score?: number;
     mistakes?: string;
 }
 
@@ -148,10 +149,140 @@ const DUMMY_REPORT: InterviewReport = {
     verdict: 'Recommended for Hire'
 };
 
+const DOMAIN_OPTIONS = [
+    'Software Engineer',
+    'Data Analyst',
+    'Product Manager',
+    'DevOps',
+    'Data Scientist'
+];
+
+const COMPANY_TYPE_OPTIONS = [
+    'Startup',
+    'MNC',
+    'Product-Based',
+    'Service-Based'
+];
+
+const QUESTION_BANKS = [DUMMY_QUESTIONS[0], DUMMY_QUESTIONS[1], DUMMY_QUESTIONS[2]] as const;
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+const tokenize = (text: string) => text.toLowerCase().match(/[a-z0-9]+/g) || [];
+
+const isSkipText = (text: string) => {
+    const t = text.toLowerCase().trim();
+    return t === 'skip' || t === 'idont know' || t === 'next question' || t === "i don't know";
+};
+
+const computeAnswerScore = (question: string, answer: string, round: number) => {
+    const cleanAnswer = answer.trim();
+    if (!cleanAnswer || isSkipText(cleanAnswer) || /no response received/i.test(cleanAnswer)) return 0;
+
+    const answerTokens = tokenize(cleanAnswer);
+    const questionTokens = tokenize(question);
+    const answerUnique = new Set(answerTokens);
+    const answerSet = new Set(answerTokens);
+    const overlap = questionTokens.filter(token => answerSet.has(token)).length;
+
+    const lengthScore = clamp((answerTokens.length / 18) * 35, 0, 35);
+    const uniquenessScore = clamp((answerUnique.size / Math.max(answerTokens.length, 1)) * 20, 0, 20);
+    const relevanceScore = clamp((overlap / Math.max(questionTokens.length, 1)) * 30, 0, 30);
+    const structureScore = /[.!?]/.test(cleanAnswer) ? 10 : 0;
+    const roundBias = round === 0 ? 5 : round === 1 ? 3 : 0;
+
+    return clamp(Math.round(lengthScore + uniquenessScore + relevanceScore + structureScore + roundBias), 0, 100);
+};
+
+const roundVerdict = (score: number, answeredCount: number) => {
+    if (answeredCount === 0) return 'No Responses Submitted';
+    if (score >= 85) return 'Strong Hire';
+    if (score >= 70) return 'Potential Hire';
+    if (score >= 50) return 'Needs Practice';
+    return 'Not Ready Yet';
+};
+
+const feedbackForRound = (score: number, answeredCount: number, skippedCount: number) => {
+    if (answeredCount === 0) return 'No answers were provided for this round, so the score remains low.';
+    if (score >= 85) return 'Strong answer quality, clear structure, and good relevance to the prompt.';
+    if (score >= 70) return 'Solid answers overall, but adding specificity and stronger examples would help.';
+    if (score >= 50) return 'Some relevant content is present, but answers are short, incomplete, or too generic.';
+    return skippedCount > 0
+        ? 'Most answers were skipped or too thin to evaluate meaningfully.'
+        : 'Responses were too short or too generic to show enough interview readiness.';
+};
+
+const buildHonestReport = (responses: UserResponse[]): InterviewReport => {
+    const roundLabels = ['Technical Round', 'Behavioral Round', 'HR Round'];
+    const roundExpectedCounts = QUESTION_BANKS.map(bank => bank.length);
+
+    const sections = roundLabels.map((label, roundIndex) => {
+        const roundResponses = responses.filter(response => response.round === roundIndex);
+        const nonSkipped = roundResponses.filter(response => !isSkipText(response.answer) && response.answer.trim().length > 0);
+        const skippedCount = roundResponses.length - nonSkipped.length;
+
+        const qualityScores = roundResponses.map(response =>
+            typeof response.score === 'number'
+                ? response.score
+                : computeAnswerScore(response.question, response.answer, roundIndex)
+        );
+
+        const avgQuality = qualityScores.length
+            ? qualityScores.reduce((sum, score) => sum + score, 0) / qualityScores.length
+            : 0;
+
+        const completeness = roundExpectedCounts[roundIndex] > 0
+            ? nonSkipped.length / roundExpectedCounts[roundIndex]
+            : 0;
+
+        const roundScore = Math.round((avgQuality * 0.7) + (completeness * 100 * 0.3));
+
+        return {
+            label,
+            score: clamp(roundScore, 0, 100),
+            feedback: feedbackForRound(clamp(roundScore, 0, 100), nonSkipped.length, skippedCount)
+        };
+    });
+
+    const weightedOverall = Math.round(
+        (sections[0].score * 0.4) +
+        (sections[1].score * 0.3) +
+        (sections[2].score * 0.3)
+    );
+
+    const answeredCount = responses.filter(response => !isSkipText(response.answer) && response.answer.trim().length > 0).length;
+    const skippedCount = responses.length - answeredCount;
+    const verdict = roundVerdict(weightedOverall, answeredCount);
+
+    const strongRounds = sections
+        .filter(section => section.score >= 75)
+        .map(section => `${section.label}: solid performance`);
+
+    const weakRounds = sections
+        .filter(section => section.score < 75)
+        .map(section => `${section.label}: needs stronger, more specific answers`);
+
+    const detailedAnalysis = roundLabels.map((label, roundIndex) => ({
+        round_name: label,
+        total_words: responses.filter(response => response.round === roundIndex)
+            .reduce((total, response) => total + response.wordCount, 0),
+        responses: responses.filter(response => response.round === roundIndex)
+    }));
+
+    return {
+        overall_score: clamp(weightedOverall, 0, 100),
+        sections,
+        detailed_analysis: detailedAnalysis,
+        strengths: strongRounds.length > 0 ? strongRounds : ['No strong signals were captured from the answers provided.'],
+        weaknesses: weakRounds.length > 0 ? weakRounds : (skippedCount > 0 ? ['Skipped answers reduced the evaluation quality.'] : ['Answers were too short or too generic to score confidently.']),
+        verdict,
+    };
+};
+
 export default function MockInterview() {
     const navigate = useNavigate();
     const [step, setStep] = useState<Step>('INTRO');
-    const [setup, setSetup] = useState({ company: '', role: '', experience: 'FRESHER' });
+    const [setup, setSetup] = useState({ company: '', role: '', experience: 'FRESHER', domain: '', companyType: COMPANY_TYPE_OPTIONS[2] });
     const [roundIndex, setRoundIndex] = useState<RoundIndex>(0);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [sessionId, setSessionId] = useState<string | null>(null);
@@ -172,6 +303,10 @@ export default function MockInterview() {
     const [hrCallOver, setHrCallOver] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [historyOpen, setHistoryOpen] = useState(false);
+    const [history, setHistory] = useState<any[]>([]);
+    // video/webcam removed per request: no camera state kept
+    const roundQuestionIndexRef = useRef<Record<RoundIndex, number>>({ 0: 0, 1: 0, 2: 0 });
 
     const [isDummyMode, setIsDummyMode] = useState(false);
     const dummyQIdxRef = useRef(0);
@@ -186,10 +321,23 @@ export default function MockInterview() {
     const [apiKey, setApiKey] = useState(localStorage.getItem('groq_api_key') || '');
     const [showingKey, setShowingKey] = useState(false);
     const [isThinking, setIsThinking] = useState(false);
+    
+    // NEW: Enhanced animation states for commercial UI
+    const [danceMove, setDanceMove] = useState(0);
+    const [showCelebration, setShowCelebration] = useState(false);
+    const [answerQuality, setAnswerQuality] = useState<'excellent' | 'good' | 'fair' | 'poor' | null>(null);
+    const [performanceMetrics, setPerformanceMetrics] = useState({ avgScore: 0, answerCount: 0, timeSpent: 0 });
+    const [streakCount, setStreakCount] = useState(0);
+    const [showParticles, setShowParticles] = useState(false);
+    const [difficulty, setDifficulty] = useState('MEDIUM');
+    // camera refs removed
 
-    const checkSkip = (text: string) => {
-        const t = text.toLowerCase().trim();
-        return t === 'skip' || t === 'idont know' || t === 'next question';
+    const checkSkip = (text: string) => isSkipText(text);
+
+    const normalizeInterviewAnswer = (text: string) => {
+        return checkSkip(text)
+            ? "I don't know the answer to this, next question please."
+            : text;
     };
 
     useEffect(() => { window.scrollTo(0, 0); }, [step]);
@@ -211,6 +359,16 @@ export default function MockInterview() {
         }, 3000);
         return () => clearInterval(interval);
     }, []);
+
+    // NEW: Dancing animation
+    useEffect(() => {
+        if (isSpeaking || isThinking) {
+            const danceInterval = setInterval(() => {
+                setDanceMove(prev => (prev + 1) % 4);
+            }, 400);
+            return () => clearInterval(danceInterval);
+        }
+    }, [isSpeaking, isThinking]);
 
      useEffect(() => {
         if (isSpeaking) {
@@ -273,7 +431,7 @@ export default function MockInterview() {
     }, [sessionId]);
 
     const startInterview = async () => {
-        if (!setup.company.trim() || !setup.role.trim()) return;
+        if (!setup.company.trim() || !setup.domain.trim()) return;
         setLoading(true);
         setError('');
         try {
@@ -289,10 +447,11 @@ export default function MockInterview() {
             setSessionId(data._id);
             setStep('INTERVIEW');
             setRoundIndex(0);
+            roundQuestionIndexRef.current = { 0: 0, 1: 0, 2: 0 };
 
-            // Add introduction for technical round
+            // Always start with the technical round first
             const intro = `Hello! I'm Alex Chen, Senior Technical Lead at ${setup.company}. I'll be conducting your technical interview today.`;
-            const firstQ = data.first_question || "Could you please introduce yourself and tell me about your technical background?";
+            const firstQ = QUESTION_BANKS[0][0];
             const fullMsg = `${intro} ${firstQ}`;
 
             setMessages([{ role: 'interviewer', content: fullMsg, timestamp: new Date().toLocaleTimeString() }]);
@@ -301,22 +460,51 @@ export default function MockInterview() {
             setIsDummyMode(true);
             setStep('INTERVIEW');
             setRoundIndex(0);
+            roundQuestionIndexRef.current = { 0: 0, 1: 0, 2: 0 };
             const intro = `Hello! I'm Alex Chen, Senior Technical Lead at ${setup.company}. I'll be conducting your technical interview today.`;
-            const firstQ = DUMMY_QUESTIONS[0][0];
+            const firstQ = QUESTION_BANKS[0][0];
             const fullMsg = `${intro} ${firstQ}`;
             setMessages([{ role: 'interviewer', content: fullMsg, timestamp: new Date().toLocaleTimeString() }]);
             speak(fullMsg, 0);
         } finally { setLoading(false); }
     };
 
+    const loadHistory = () => {
+        try {
+            const h = JSON.parse(localStorage.getItem('mock_interview_history') || '[]');
+            setHistory(Array.isArray(h) ? h : []);
+        } catch (e) { setHistory([]); }
+    };
+
     const handleSendChat = async () => {
         if (!userInput.trim() || isSending || isSpeaking) return;
         const turn = userInput;
         const lastQ = messages.filter(m => m.role === 'interviewer').slice(-1)[0]?.content || "";
-         setMessages(prev => [...prev, { role: 'user', content: turn, timestamp: new Date().toLocaleTimeString() }]);
+        setMessages(prev => [...prev, { role: 'user', content: turn, timestamp: new Date().toLocaleTimeString() }]);
 
         const isSkip = checkSkip(turn);
-        const actualResponse = isSkip ? turn : turn;
+        const actualResponse = normalizeInterviewAnswer(turn);
+        const responseScore = computeAnswerScore(lastQ, actualResponse, roundIndex);
+
+        // NEW: Determine answer quality for celebration
+        let quality: 'excellent' | 'good' | 'fair' | 'poor' = 'poor';
+        if (responseScore >= 80) quality = 'excellent';
+        else if (responseScore >= 65) quality = 'good';
+        else if (responseScore >= 50) quality = 'fair';
+
+        // NEW: Update streak and show celebration
+        if (!isSkip && responseScore >= 65) {
+            setStreakCount(prev => prev + 1);
+            setShowCelebration(true);
+            setShowParticles(true);
+            setTimeout(() => setShowCelebration(false), 1500);
+            setTimeout(() => setShowParticles(false), 2000);
+        } else {
+            setStreakCount(0);
+        }
+
+        setAnswerQuality(quality);
+        setTimeout(() => setAnswerQuality(null), 2000);
 
         // Track response metadata
         const newResponse: UserResponse = {
@@ -324,10 +512,22 @@ export default function MockInterview() {
             question: lastQ,
             answer: actualResponse,
             wordCount: turn.split(' ').length,
+            score: responseScore,
             suggestion: roundIndex === 0 ? "Be more specific with technical terminology." : "Use the STAR method for better context.",
             mistakes: isSkip ? "Skipped question." : (roundIndex === 1 ? "Incomplete STAR methodology." : undefined)
         };
         setAllResponses(prev => [...prev, newResponse]);
+
+        // NEW: Update performance metrics
+        const updatedResponses = [...allResponses, newResponse];
+        const avgScore = updatedResponses.length > 0 
+            ? updatedResponses.reduce((sum, r) => sum + (r.score || 0), 0) / updatedResponses.length 
+            : 0;
+        setPerformanceMetrics({
+            avgScore: Math.round(avgScore),
+            answerCount: updatedResponses.length,
+            timeSpent: Math.floor((Date.now() - (sessionId ? parseInt(sessionId.slice(0, 8), 16) : Date.now())) / 1000)
+        });
 
         setUserInput('');
         setIsSending(true);
@@ -336,9 +536,10 @@ export default function MockInterview() {
              if (isDummyMode) {
                 setTimeout(() => {
                     dummyQIdxRef.current++;
-                    if (dummyQIdxRef.current >= 5) advanceRound();
+                    const bank = QUESTION_BANKS[roundIndex];
+                    if (dummyQIdxRef.current >= bank.length) advanceRound();
                     else {
-                        const nextQ = DUMMY_QUESTIONS[roundIndex][dummyQIdxRef.current];
+                        const nextQ = bank[dummyQIdxRef.current];
                         setMessages(prev => [...prev, { role: 'interviewer', content: nextQ, timestamp: new Date().toLocaleTimeString() }]);
                         speak(nextQ, roundIndex);
                     }
@@ -355,18 +556,99 @@ export default function MockInterview() {
                 },
                 body: JSON.stringify({ session_id: sessionId, user_response: actualResponse, round_index: roundIndex })
             });
-            const data = await res.json();
+            await res.json();
             setIsThinking(false);
-            if (data.is_round_complete) {
+            const bank = QUESTION_BANKS[roundIndex];
+            const currentIndex = roundQuestionIndexRef.current[roundIndex];
+            const nextIndex = currentIndex + 1;
+
+            if (nextIndex >= bank.length) {
                 advanceRound();
-            } else {
-                setMessages(prev => [...prev, { role: 'interviewer', content: data.interviewer_text, timestamp: new Date().toLocaleTimeString() }]);
-                speak(data.interviewer_text, roundIndex);
+                return;
             }
+
+            roundQuestionIndexRef.current[roundIndex] = nextIndex;
+            const nextQuestion = bank[nextIndex];
+            setMessages(prev => [...prev, { role: 'interviewer', content: nextQuestion, timestamp: new Date().toLocaleTimeString() }]);
+            speak(nextQuestion, roundIndex);
         } catch (err) {
             setIsThinking(false);
             console.error("Chat Error:", err);
         } finally { setIsSending(false); }
+    };
+
+    // Handle quick action buttons (skip / idont know / next question)
+    const handleQuickAction = async (hint: string) => {
+        if (isSending || isSpeaking) return;
+        const displayText = hint; // show the hint as user's message
+        const lastQ = messages.filter(m => m.role === 'interviewer').slice(-1)[0]?.content || "";
+        setMessages(prev => [...prev, { role: 'user', content: displayText, timestamp: new Date().toLocaleTimeString() }]);
+
+        // record as a skipped response
+        const newResponse: UserResponse = {
+            round: roundIndex,
+            question: lastQ,
+            answer: "",
+            wordCount: 0,
+            score: 0,
+            suggestion: roundIndex === 0 ? "Be more specific with technical terminology." : "Use the STAR method for better context.",
+            mistakes: "Skipped question."
+        };
+        setAllResponses(prev => [...prev, newResponse]);
+
+        setIsSending(true);
+        setIsThinking(true);
+
+        try {
+            if (isDummyMode) {
+                setTimeout(() => {
+                    dummyQIdxRef.current++;
+                    const bank = QUESTION_BANKS[roundIndex];
+                    if (dummyQIdxRef.current >= bank.length) advanceRound();
+                    else {
+                        const nextQ = bank[dummyQIdxRef.current];
+                        setMessages(prev => [...prev, { role: 'interviewer', content: nextQ, timestamp: new Date().toLocaleTimeString() }]);
+                        speak(nextQ, roundIndex);
+                    }
+                    setIsThinking(false);
+                    setIsSending(false);
+                }, 400);
+                return;
+            }
+            const makeChatCall = async (userResp: string) => {
+                const res = await fetch(`${API_BASE_URL}/api/interview/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Groq-API-Key': apiKey
+                    },
+                    body: JSON.stringify({ session_id: sessionId, user_response: userResp, round_index: roundIndex })
+                });
+                return res.json();
+            };
+
+            await makeChatCall("");
+            setIsThinking(false);
+
+            const bank = QUESTION_BANKS[roundIndex];
+            const currentIndex = roundQuestionIndexRef.current[roundIndex];
+            const nextIndex = currentIndex + 1;
+
+            if (nextIndex >= bank.length) {
+                advanceRound();
+                return;
+            }
+
+            roundQuestionIndexRef.current[roundIndex] = nextIndex;
+            const nextQuestion = bank[nextIndex];
+            setMessages(prev => [...prev, { role: 'interviewer', content: nextQuestion, timestamp: new Date().toLocaleTimeString() }]);
+            speak(nextQuestion, roundIndex);
+        } catch (e) {
+            setIsThinking(false);
+            console.error(e);
+        } finally {
+            setIsSending(false);
+        }
     };
 
     const advanceRound = async () => {
@@ -382,7 +664,7 @@ export default function MockInterview() {
         }
 
         try {
-            // Fetch first question of next round from AI
+            // Always move into the next round with its own local bank
             const res = await fetch(`${API_BASE_URL}/api/interview/chat`, {
                 method: 'POST',
                 headers: { 
@@ -391,10 +673,11 @@ export default function MockInterview() {
                 },
                 body: JSON.stringify({ session_id: sessionId, user_response: "", round_index: nextRound })
             });
-            const data = await res.json();
+            await res.json();
             setIsThinking(false);
 
             setRoundIndex(nextRound);
+            roundQuestionIndexRef.current[nextRound] = 0;
             setMessages([]); // Clear chat for new round
 
             // Add introduction based on round
@@ -402,9 +685,10 @@ export default function MockInterview() {
             if (nextRound === 1) {
                 intro = `Hello! I'm Sarah Johnson, Senior Engineering Manager at ${setup.company}. I'll be conducting your behavioral interview now.`;
             } else if (nextRound === 2) {
-                intro = `Hello! I'm Michael Rodriguez, HR Director at ${setup.company}. I'll be conducting your final HR interview.`;
+                intro = `Hello! I'm Michael Rodriguez, HR Director at ${setup.company}. I'll be conducting your final HR interview. Please answer using text only.`;
             }
-            const fullMsg = `${intro} ${data.interviewer_text}`;
+            const nextQuestion = QUESTION_BANKS[nextRound][0];
+            const fullMsg = `${intro} ${nextQuestion}`;
 
             setMessages([{ role: 'interviewer', content: fullMsg, timestamp: new Date().toLocaleTimeString() }]);
             speak(fullMsg, nextRound);
@@ -412,16 +696,17 @@ export default function MockInterview() {
             console.error("Transition Error:", err);
             // Fallback
             setRoundIndex(nextRound);
-            if (nextRound === 2) startHrVoiceRound();
+            roundQuestionIndexRef.current[nextRound] = 0;
+            const intro = nextRound === 2
+                ? `Hello! I'm Michael Rodriguez, HR Director at ${setup.company}. I'll be conducting your final HR interview. Please answer using text only.`
+                : `Hello! I'm Sarah Johnson, Senior Engineering Manager at ${setup.company}. I'll be conducting your behavioral interview now.`;
+            const nextQuestion = QUESTION_BANKS[nextRound][0];
+            const fullMsg = `${intro} ${nextQuestion}`;
+            setMessages([{ role: 'interviewer', content: fullMsg, timestamp: new Date().toLocaleTimeString() }]);
+            speak(fullMsg, nextRound);
         } finally {
             setIsSending(false);
         }
-    };
-
-    const startHrVoiceRound = () => {
-        const intro = `Hello! I'm Michael Rodriguez, HR Director at ${setup.company}. I'll be conducting your final HR interview. Tell me about your long-term career goals.`;
-        setMessages([{ role: 'interviewer', content: intro, timestamp: new Date().toLocaleTimeString() }]);
-        speak(intro, 2);
     };
 
     const walkOut = () => {
@@ -469,7 +754,7 @@ export default function MockInterview() {
         setMessages(prev => [...prev, { role: 'user', content: text, timestamp: new Date().toLocaleTimeString() }]);
 
          const isSkip = checkSkip(text);
-        const actualText = isSkip ? "I don't know the answer to this, next question please." : text;
+        const actualText = normalizeInterviewAnswer(text);
 
         const newResponse: UserResponse = {
             round: 2,
@@ -525,22 +810,36 @@ export default function MockInterview() {
     };
 
     const speak = (text: string, currentRound: number) => {
-        if (typeof window !== 'undefined' && window.speechSynthesis) {
+        if (typeof window === 'undefined' || !window.speechSynthesis) return;
+
+        // If voices are not loaded yet, retry when they are available
+        const voices = window.speechSynthesis.getVoices();
+        if (!voices || voices.length === 0) {
+            const handleVoices = () => {
+                try {
+                    window.speechSynthesis.onvoiceschanged = null;
+                    speak(text, currentRound);
+                } catch (e) { /* ignore */ }
+            };
+            window.speechSynthesis.onvoiceschanged = handleVoices;
+            // also trigger a voices fetch
+            window.speechSynthesis.getVoices();
+            return;
+        }
+
+        try {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
-            utteranceRef.current = utterance; // Prevent garbage collection
+            utteranceRef.current = utterance; // retain reference
 
-            // Voice Selection based on round
-            const voices = window.speechSynthesis.getVoices();
+            // Voice Selection based on round (best-effort, fallback to default)
             if (currentRound === 2) {
-                // Female Voice for HR
-                const femaleVoice = voices.find(v => v.name.includes('Female') || v.name.includes('Samantha') || v.name.includes('Google US English'));
+                const femaleVoice = voices.find((v: any) => /female|samantha|google us english/i.test(v.name));
                 if (femaleVoice) utterance.voice = femaleVoice;
                 utterance.pitch = 1.2;
                 utterance.rate = 1.0;
             } else {
-                // Male Voice for Technical/Behavioral
-                const maleVoice = voices.find(v => v.name.includes('Male') || v.name.includes('Alex') || v.name.includes('Google UK English Male'));
+                const maleVoice = voices.find((v: any) => /male|alex|google uk english male/i.test(v.name));
                 if (maleVoice) utterance.voice = maleVoice;
                 utterance.pitch = 0.9;
                 utterance.rate = 1.0;
@@ -552,19 +851,11 @@ export default function MockInterview() {
             };
             utterance.onend = () => {
                 setIsSpeaking(false);
-                if (currentRound === 2 && !hrCallOver) {
-                    setIsListening(true);
-                    try { recognitionRef.current?.start(); } catch (e) { }
-
-                    // Initial 2s silence timeout (if user doesn't speak at all)
-                    if (voiceTimeoutRef.current) clearTimeout(voiceTimeoutRef.current);
-                    voiceTimeoutRef.current = setTimeout(() => {
-                        handleVoiceAnswer("No response received.");
-                        recognitionRef.current?.stop();
-                    }, 2000);
-                }
             };
+
             window.speechSynthesis.speak(utterance);
+        } catch (e) {
+            console.error('TTS error', e);
         }
     };
 
@@ -578,27 +869,26 @@ export default function MockInterview() {
         
         setStep('REPORT');
         setLoadingReport(true);
-        if (!sessionId || isDummyMode) {
-            // Build detailed dummy report based on actual responses
-            const reportData = { ...DUMMY_REPORT };
-            const rounds = ["Technical Round", "Behavioral Round", "HR Round"];
-            reportData.detailed_analysis = rounds.map((r, i) => {
-                const roundRes = allResponses.filter(res => res.round === i);
-                return {
-                    round_name: r,
-                    total_words: roundRes.reduce((acc, curr) => acc + curr.wordCount, 0),
-                    responses: roundRes
-                };
-            });
-            setReport(reportData);
-            setLoadingReport(false);
-            return;
-        }
+        const reportData = buildHonestReport(allResponses);
+        
+        // Show report immediately (don't wait for backend)
+        setReport(reportData);
+        setLoadingReport(false);
+        
+        // Save to localStorage
         try {
-            const res = await fetch(`${API_BASE_URL}/api/interview/report?session_id=${sessionId}`);
-            const data = await res.json();
-            setReport(data);
-        } catch (err) { setReport(DUMMY_REPORT); } finally { setLoadingReport(false); }
+            const entry = { id: sessionId || `local-${Date.now()}`, date: new Date().toISOString(), company: setup.company, role: setup.role, domain: setup.domain, companyType: setup.companyType, experience: setup.experience, score: reportData.overall_score, report: reportData };
+            const prev = JSON.parse(localStorage.getItem('mock_interview_history') || '[]');
+            const next = [entry].concat(Array.isArray(prev) ? prev : []);
+            localStorage.setItem('mock_interview_history', JSON.stringify(next.slice(0,50)));
+        } catch (e) { }
+        
+        // Attempt to save report to backend asynchronously (no wait)
+        if (sessionId && !isDummyMode) {
+            fetch(`${API_BASE_URL}/api/interview/report?session_id=${sessionId}`, { timeout: 5000 }).catch(err => {
+                console.warn('Backend report save failed (non-critical):', err);
+            });
+        }
     };
 
     // Auto-fetch voices when they are loaded (some browsers load them asynchronously)
@@ -608,19 +898,48 @@ export default function MockInterview() {
         }
     }, []);
 
+    // camera start/stop effect removed
+
     const ROUND_META = [
         { label: 'Technical Round', icon: <Code2 className="w-5 h-5" />, color: '#7C3AED', hint: 'DSA, Architecture, and Logic. Type your answers.' },
         { label: 'Behavioral Round', icon: <User className="w-5 h-5" />, color: '#1D74F2', hint: 'Situational scenarios and culture fit. Type your answers.' },
-        { label: 'HR Voice Round', icon: <Mic className="w-5 h-5" />, color: '#EC4899', hint: 'Real-time voice conversation with Sophia.' },
+        { label: 'HR Round', icon: <Mic className="w-5 h-5" />, color: '#EC4899', hint: 'Type your HR answers clearly and honestly.' },
     ];
 
     const SpeakingAvatar = ({ isHR }: { isHR: boolean }) => {
         const eyeScaleY = blink ? 0.05 : 1;
         const getMouthPath = () => isSpeaking && mouthOpen ? "M 95 168 Q 110 180 125 168 Q 110 190 95 168 Z" : "M 92 168 Q 110 185 128 168";
+        
+        // NEW: Enhanced dancing transformation
+        const getDanceTransform = () => {
+            const moves = [
+                "translate(0px, 0px) rotateZ(0deg) scaleX(1)",
+                "translate(8px, -10px) rotateZ(2deg) scaleX(1.02)",
+                "translate(-8px, -12px) rotateZ(-2deg) scaleX(0.98)",
+                "translate(4px, -8px) rotateZ(1deg) scaleX(1.01)"
+            ];
+            return moves[danceMove] || moves[0];
+        };
+
         return (
             <div className="flex flex-col items-center">
-                <style>{`@keyframes glowPulse { 0%,100%{opacity:0.4;transform:scale(1)} 50%{opacity:0.8;transform:scale(1.05)} } @keyframes breathing { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(1.01)} }`}</style>
+                <style>{`
+                    @keyframes glowPulse { 0%,100%{opacity:0.4;transform:scale(1)} 50%{opacity:0.8;transform:scale(1.05)} }
+                    @keyframes breathing { 0%,100%{transform:scaleY(1)} 50%{transform:scaleY(1.01)} }
+                    @keyframes danceBounce { 0%{transform:translateY(0px)} 50%{transform:translateY(-15px)} 100%{transform:translateY(0px)} }
+                    @keyframes swing { 0%{transform:rotateZ(-3deg)} 50%{transform:rotateZ(3deg)} 100%{transform:rotateZ(-3deg)} }
+                    @keyframes float { 0%,100%{transform:translateY(0px)} 50%{transform:translateY(-8px)} }
+                `}</style>
                 <div className="relative">
+                    {/* NEW: Floating particles around avatar */}
+                    {(isSpeaking || isThinking) && showParticles && (
+                        <>
+                            <div className="absolute w-2 h-2 bg-yellow-300 rounded-full animate-[float_2s_infinite]" style={{top: '-30px', left: '20px'}} />
+                            <div className="absolute w-2 h-2 bg-purple-300 rounded-full animate-[float_2s_infinite]" style={{top: '-20px', right: '20px', animationDelay: '0.3s'}} />
+                            <div className="absolute w-1.5 h-1.5 bg-cyan-300 rounded-full animate-[float_2s_infinite]" style={{bottom: '20px', left: '-15px', animationDelay: '0.6s'}} />
+                        </>
+                    )}
+
                     <div className={`absolute inset-0 ${isHR ? 'bg-cyan-400' : 'bg-[#7C3AED]'} rounded-full blur-[80px] opacity-15 animate-[glowPulse_3s_infinite]`} />
                     {isThinking && (
                         <div className="absolute inset-0 flex items-center justify-center">
@@ -628,7 +947,17 @@ export default function MockInterview() {
                             <div className={`absolute w-44 h-44 border-2 ${isHR ? 'border-cyan-400/10' : 'border-[#7C3AED]/10'} rounded-full animate-pulse`} />
                         </div>
                     )}
-                    <svg width="180" height="300" viewBox="0 0 220 380" className="relative z-10 drop-shadow-xl overflow-visible">
+                    
+                    <svg 
+                        width="180" 
+                        height="300" 
+                        viewBox="0 0 220 380" 
+                        className="relative z-10 drop-shadow-xl overflow-visible transition-transform duration-300"
+                        style={{
+                            transform: (isSpeaking || isThinking) ? getDanceTransform() : "translate(0px, 0px) rotateZ(0deg) scaleX(1)",
+                            animation: (isSpeaking || isThinking) ? 'danceBounce 0.8s ease-in-out infinite' : 'none'
+                        }}
+                    >
                         <defs>
                             <radialGradient id="faceGrad" cx="50%" cy="45%" r="55%"><stop offset="0%" stopColor="#FFE0BB" /><stop offset="60%" stopColor="#F5C28A" /><stop offset="100%" stopColor="#E8A96B" /></radialGradient>
                             <linearGradient id="suitGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" stopColor="#1e3a5f" /><stop offset="100%" stopColor="#0f2340" /></linearGradient>
@@ -650,6 +979,15 @@ export default function MockInterview() {
                         <path d={getMouthPath()} fill={isSpeaking && mouthOpen ? "#8B2040" : "none"} stroke="#b03050" strokeWidth="3" strokeLinecap="round" />
                     </svg>
                 </div>
+                
+                {/* NEW: Celebration confetti effect */}
+                {showCelebration && (
+                    <>
+                        <motion.div initial={{y: 0, opacity: 1}} animate={{y: -100, opacity: 0}} transition={{duration: 1}} className="absolute top-0 text-3xl">🎉</motion.div>
+                        <motion.div initial={{y: 0, opacity: 1}} animate={{y: -100, opacity: 0}} transition={{duration: 1}} className="absolute top-5 left-10 text-2xl">⭐</motion.div>
+                        <motion.div initial={{y: 0, opacity: 1}} animate={{y: -100, opacity: 0}} transition={{duration: 1}} className="absolute top-5 right-10 text-2xl">✨</motion.div>
+                    </>
+                )}
             </div>
         );
     };
@@ -745,7 +1083,7 @@ export default function MockInterview() {
                                     Mock <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-[#6C4DFF] via-[#EC4899] to-[#FF5B5B] inline-block">INTERVIEW.</span>
                                 </h1>
                                 <p className="text-xl text-[#475569] mb-12 leading-relaxed max-w-lg font-medium">
-                                    Simulate high-stakes interviews with our AI protocol. Practice Technical, Behavioral, and HR rounds to build clinical authority.
+                                    Simulate realistic interviews with AI, voice, and video practice. Build confidence for technical, behavioral, and HR rounds before the real call.
                                 </p>
 
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10 max-w-2xl">
@@ -762,16 +1100,24 @@ export default function MockInterview() {
                                     ))}
                                 </div>
                                 
-                                <button onClick={() => setStep('API_KEY')} className="sp-btn">
-                                    <span className="sp-orb sp-orb1" />
-                                    <span className="sp-orb sp-orb2" />
-                                    <span className="sp-orb sp-orb3" />
-                                    <span className="sp-label">Start Practice <ArrowRight className="w-5 h-5" /></span>
-                                </button>
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => setStep('API_KEY')} className="sp-btn">
+                                        <span className="sp-orb sp-orb1" />
+                                        <span className="sp-orb sp-orb2" />
+                                        <span className="sp-orb sp-orb3" />
+                                        <span className="sp-label">Start Practice <ArrowRight className="w-5 h-5" /></span>
+                                    </button>
+                                    <button onClick={() => { loadHistory(); setHistoryOpen(true); }} className="px-4 py-3 bg-white border border-gray-100 rounded-2xl text-sm font-bold">History</button>
+                                </div>
+
+                                <div className="mt-10 flex items-center gap-3 text-xs font-black uppercase tracking-[0.3em] text-gray-400">
+                                    <ChevronRight className="w-4 h-4 text-[#7C3AED]" /> Scroll to explore what you can practice
+                                </div>
+                                
                             </div>
                             <div className="hidden lg:block relative h-[520px] w-full max-w-[520px] ml-auto">
                                 <div className="absolute inset-0 bg-[#7C3AED]/5 rounded-[4rem] border-8 border-gray-50 overflow-hidden shadow-2xl">
-                                    <img src="https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?auto=format&fit=crop&q=80&w=1200" className="w-full h-full object-cover grayscale opacity-40 mix-blend-multiply" alt="Mock Interview Visualization" />
+                                    <img src="https://www.awdiz.in/newsite/images/mockinterview.webp" className="w-full h-full object-cover grayscale opacity-40 mix-blend-multiply" alt="Mock Interview Visualization" />
                                     <div className="absolute bottom-12 left-12 right-12 bg-white/90 backdrop-blur-md p-8 rounded-3xl border border-white/20">
                                         <div className="flex gap-2 mb-4">
                                             <div className="w-2 h-2 rounded-full bg-[#7C3AED]" />
@@ -781,6 +1127,63 @@ export default function MockInterview() {
                                         <p className="text-sm font-bold text-[#111827] leading-relaxed">"Practice is the hardest part of learning, and training is the essence of transformation."</p>
                                     </div>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div className="mt-24 space-y-10">
+                            <div className="max-w-3xl">
+                                <span className="text-[#7C3AED] font-black uppercase tracking-[0.35em] text-[10px]">Why students use it</span>
+                                <h2 className="text-3xl sm:text-5xl font-black text-[#111827] mt-4 leading-tight">A realistic rehearsal before the real interview.</h2>
+                                <p className="mt-4 text-lg text-[#475569] leading-relaxed">
+                                    The page is designed like a guided experience. Users can see the value first, then start practicing only after curiosity is built through examples, feedback, and a clear interview flow.
+                                </p>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
+                                {[
+                                    { title: 'Video interview simulation', desc: 'Turn on camera mode and rehearse eye contact, speaking pace, and presence.', img: 'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=900' },
+                                    { title: 'Company-specific practice', desc: 'Set company type and role so the questions feel closer to the real job.', img: 'https://images.unsplash.com/photo-1552664730-d307ca884978?auto=format&fit=crop&q=80&w=900' },
+                                    { title: 'HR interview mode', desc: 'Switch into voice mode and practice how you answer under pressure.', img: 'https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&q=80&w=900' },
+                                    { title: 'History and score tracking', desc: 'Return to past interviews, compare performance, and see progress over time.', img: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&q=80&w=900' }
+                                ].map((item, index) => (
+                                    <motion.div
+                                        key={item.title}
+                                        initial={{ opacity: 0, y: 18 }}
+                                        whileInView={{ opacity: 1, y: 0 }}
+                                        viewport={{ once: true, amount: 0.3 }}
+                                        transition={{ duration: 0.45, delay: index * 0.05 }}
+                                        className="group overflow-hidden rounded-[2rem] border border-gray-100 bg-white shadow-lg"
+                                    >
+                                        <div className="h-48 overflow-hidden">
+                                            <img src={item.img} alt={item.title} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                                        </div>
+                                        <div className="p-6">
+                                            <div className="text-[10px] font-black uppercase tracking-[0.35em] text-[#7C3AED] mb-3">Feature {index + 1}</div>
+                                            <h3 className="text-xl font-black text-[#111827] mb-3">{item.title}</h3>
+                                            <p className="text-sm leading-6 text-[#475569]">{item.desc}</p>
+                                        </div>
+                                    </motion.div>
+                                ))}
+                            </div>
+
+                            <div className="grid lg:grid-cols-3 gap-5">
+                                {[
+                                    { title: 'How it helps', bullets: ['Reduce interview anxiety', 'Practice structured answers', 'Get instant feedback', 'Track confidence over time'] },
+                                    { title: 'What you can try', bullets: ['Text answers', 'Voice answers', 'Video mode', 'Domain-based scenarios'] },
+                                    { title: 'What happens next', bullets: ['Pick your profile', 'Answer questions one by one', 'Review score and strengths', 'Revisit your history later'] },
+                                ].map(panel => (
+                                    <div key={panel.title} className="rounded-[2rem] border border-gray-100 bg-gradient-to-br from-white to-[#FAF5FF] p-6 shadow-sm">
+                                        <h3 className="text-lg font-black text-[#111827] mb-4">{panel.title}</h3>
+                                        <ul className="space-y-3 text-sm text-[#475569]">
+                                            {panel.bullets.map(item => (
+                                                <li key={item} className="flex items-start gap-3">
+                                                    <span className="mt-1.5 h-2 w-2 rounded-full bg-[#7C3AED]" />
+                                                    <span>{item}</span>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                ))}
                             </div>
                         </div>
                     </motion.div>
@@ -798,24 +1201,36 @@ export default function MockInterview() {
                                 </h2>
                                 <div className="h-1 w-16 bg-black mx-auto rounded-full" />
                             </div>
-                            <div className="space-y-6 text-left">
+                                <div className="space-y-6 text-left">
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-black uppercase tracking-widest ml-4">Domain</label>
+                                    <select value={setup.domain} onChange={e => setSetup({ ...setup, domain: e.target.value, role: e.target.value })} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm font-bold">
+                                        <option value="">Select domain</option>
+                                        {DOMAIN_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-3">
+                                    <label className="text-[10px] font-black text-black uppercase tracking-widest ml-4">Company Type</label>
+                                    <select value={setup.companyType} onChange={e => setSetup({ ...setup, companyType: e.target.value })} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-3 text-sm font-bold">
+                                        {COMPANY_TYPE_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                </div>
                                 <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl space-y-2">
                                     <div className="flex items-center gap-2 text-amber-600 font-bold text-xs uppercase tracking-wider">
                                         <ShieldCheck size={14} /> Protocol Requirement
                                     </div>
                                     <p className="text-[11px] text-amber-800 leading-relaxed font-semibold">
-                                        Our AI engine requires a <strong>Groq API Key</strong> to process low-latency conversations. 
-                                        Don't have one? Get a free key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">console.groq.com</a>
+                                        Our AI engine requires an API Key to process conversations. If you use Groq, you can get a free key at <a href="https://console.groq.com/keys" target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-900">console.groq.com</a>
                                     </p>
                                 </div>
                                 
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-black uppercase tracking-widest ml-4">Groq API Key</label>
+                                    <label className="text-[10px] font-black text-black uppercase tracking-widest ml-4">API Key</label>
                                     <div className="relative">
                                         <Zap className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
                                         <input 
                                             type={showingKey ? "text" : "password"} 
-                                            placeholder="gsk_..." 
+                                            placeholder="Enter API key" 
                                             className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-14 py-4 text-xs font-bold focus:ring-4 focus:ring-violet-500/10 placeholder:text-gray-300" 
                                             value={apiKey} 
                                             onChange={e => setApiKey(e.target.value)} 
@@ -911,13 +1326,62 @@ export default function MockInterview() {
                                         .auth-label { position:relative; z-index:5; display:flex; align-items:center; gap:16px; }
                                     `}</style>
                                     <button 
-                                        onClick={() => {
-                                            if (apiKey.startsWith('gsk_')) {
-                                                localStorage.setItem('groq_api_key', apiKey);
-                                                setStep('SETUP');
-                                            } else {
-                                                alert("Invalid key format. Groq keys usually start with 'gsk_'.");
-                                            }
+                                        onClick={async () => {
+                                                if (!apiKey.trim()) return;
+                                                // Reject keys that were used previously by this UI
+                                                try {
+                                                    const usedRaw = localStorage.getItem('used_api_keys') || '[]';
+                                                    const usedKeys = Array.isArray(JSON.parse(usedRaw)) ? JSON.parse(usedRaw) : [];
+                                                    if (usedKeys.includes(apiKey)) {
+                                                        alert('This API key has already been used here. Please provide a fresh API key.');
+                                                        return;
+                                                    }
+                                                } catch (e) {
+                                                    // ignore parse errors and proceed
+                                                }
+
+                                                setLoading(true);
+                                                setError('');
+                                                try {
+                                                    // Try a lightweight setup call to validate the provided API key.
+                                                    const res = await fetch(`${API_BASE_URL}/api/interview/setup`, {
+                                                        method: 'POST',
+                                                        headers: {
+                                                            'Content-Type': 'application/json',
+                                                            'X-Groq-API-Key': apiKey
+                                                        },
+                                                        body: JSON.stringify({ company: 'Validator Inc', role: 'Validator', domain: 'Validator' })
+                                                    });
+
+                                                    if (res.status === 401 || res.status === 403) {
+                                                        alert('API key rejected (unauthorized). Please provide a valid key.');
+                                                        setLoading(false);
+                                                        return;
+                                                    }
+
+                                                    if (!res.ok) {
+                                                        // Non-auth errors — inform the user and do not accept the key.
+                                                        alert('Unable to validate API key (server error). Check network or try again later.');
+                                                        setLoading(false);
+                                                        return;
+                                                    }
+
+                                                    // Valid key — persist and proceed to setup
+                                                    localStorage.setItem('groq_api_key', apiKey);
+
+                                                    // Mark this key as used so it cannot be reused later
+                                                    try {
+                                                        const prev = JSON.parse(localStorage.getItem('used_api_keys') || '[]');
+                                                        const arr = Array.isArray(prev) ? prev : [];
+                                                        arr.push(apiKey);
+                                                        localStorage.setItem('used_api_keys', JSON.stringify(arr.slice(-50)));
+                                                    } catch (e) { /* ignore */ }
+
+                                                    setStep('SETUP');
+                                                } catch (e) {
+                                                    console.error('Key validation error', e);
+                                                    alert('Network error while validating API key. Ensure backend is reachable.');
+                                                } finally { setLoading(false); }
                                         }} 
                                         disabled={!apiKey.trim()} 
                                         className="auth-btn"
@@ -947,17 +1411,31 @@ export default function MockInterview() {
                             </div>
                             <div className="space-y-6 text-left">
                                 <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-black uppercase tracking-widest ml-4">Target Role</label>
-                                    <div className="relative">
-                                        <Briefcase className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
-                                        <input type="text" placeholder="e.g. Backend Developer" className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-14 py-4 text-sm font-bold focus:ring-4 focus:ring-violet-500/10 placeholder:text-gray-300" value={setup.role} onChange={e => setSetup({ ...setup, role: e.target.value })} />
-                                    </div>
-                                </div>
-                                <div className="space-y-3">
-                                    <label className="text-[10px] font-black text-black uppercase tracking-widest ml-4">Target Institution</label>
+                                    <label className="text-[10px] font-black text-black uppercase tracking-widest ml-4">Target Company</label>
                                     <div className="relative">
                                         <Building2 className="absolute left-6 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-300" />
                                         <input type="text" placeholder="e.g. Google" className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-14 py-4 text-sm font-bold focus:ring-4 focus:ring-violet-500/10 placeholder:text-gray-300" value={setup.company} onChange={e => setSetup({ ...setup, company: e.target.value })} />
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center ml-4">
+                                        <label className="text-[10px] font-black text-black uppercase tracking-widest">Difficulty Level</label>
+                                        <span className="text-[11px] font-black text-black uppercase tracking-widest px-4 py-1.5 bg-purple-50 rounded-full border border-purple-200 italic transition-all">{difficulty}</span>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {['EASY', 'MEDIUM', 'HARD'].map((level) => (
+                                            <button
+                                                key={level}
+                                                onClick={() => setDifficulty(level)}
+                                                className={`py-3 px-2 rounded-xl font-black uppercase text-[10px] tracking-widest transition-all ${
+                                                    difficulty === level
+                                                        ? level === 'HARD' ? 'bg-red-500 text-white' : level === 'MEDIUM' ? 'bg-purple-500 text-white' : 'bg-green-500 text-white'
+                                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                                }`}
+                                            >
+                                                {level === 'EASY' && '🟢'} {level === 'MEDIUM' && '🟡'} {level === 'HARD' && '🔴'} {level}
+                                            </button>
+                                        ))}
                                     </div>
                                 </div>
                                 <div className="space-y-4">
@@ -989,7 +1467,7 @@ export default function MockInterview() {
                                     </div>
                                 </div>
                                 <div className="pt-3">
-                                    <button onClick={startInterview} disabled={loading || !setup.company || !setup.role} className={`sp-btn w-full !py-5 !rounded-2xl ${loading || !setup.company || !setup.role ? '!bg-gray-300 !text-white cursor-not-allowed' : ''}`}>
+                                    <button onClick={startInterview} disabled={loading || !setup.company || !setup.domain} className={`sp-btn w-full !py-5 !rounded-2xl ${loading || !setup.company || !setup.domain ? '!bg-gray-300 !text-white cursor-not-allowed' : ''}`}>
                                         <span className="sp-orb sp-orb1" />
                                         <span className="sp-orb sp-orb2" />
                                         <span className="sp-orb sp-orb3" />
@@ -1005,6 +1483,45 @@ export default function MockInterview() {
 
                 {step === 'INTERVIEW' && (
                     <motion.div key="interview" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="max-w-6xl mx-auto px-6 pt-12">
+                        {/* NEW: Performance Metrics Dashboard */}
+                        <motion.div 
+                            initial={{ y: -20, opacity: 0 }} 
+                            animate={{ y: 0, opacity: 1 }} 
+                            className="grid grid-cols-4 gap-4 mb-8"
+                        >
+                            <div className="bg-gradient-to-br from-purple-50 to-purple-100 border border-purple-200 rounded-2xl p-4">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-purple-600 mb-2">Streak 🔥</div>
+                                <div className="text-3xl font-black text-purple-900">{streakCount}</div>
+                                <div className="text-[9px] text-purple-600 mt-1">Good answers</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-2xl p-4">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-2">Score ⭐</div>
+                                <div className="text-3xl font-black text-blue-900">{performanceMetrics.avgScore}%</div>
+                                <div className="text-[9px] text-blue-600 mt-1">Average</div>
+                            </div>
+                            <div className="bg-gradient-to-br from-green-50 to-green-100 border border-green-200 rounded-2xl p-4">
+                                <div className="text-[10px] font-black uppercase tracking-widest text-green-600 mb-2">Answers ✓</div>
+                                <div className="text-3xl font-black text-green-900">{performanceMetrics.answerCount}</div>
+                                <div className="text-[9px] text-green-600 mt-1">Submitted</div>
+                            </div>
+                            <div className={`rounded-2xl p-4 border-2 font-black text-center transition-all ${
+                                answerQuality === 'excellent' ? 'bg-yellow-50 border-yellow-300 text-yellow-600' :
+                                answerQuality === 'good' ? 'bg-green-50 border-green-300 text-green-600' :
+                                answerQuality === 'fair' ? 'bg-orange-50 border-orange-300 text-orange-600' :
+                                answerQuality === 'poor' ? 'bg-red-50 border-red-300 text-red-600' :
+                                'bg-gray-50 border-gray-200 text-gray-400'
+                            }`}>
+                                <div className="text-[10px] uppercase tracking-widest mb-1">Last Answer</div>
+                                <div className="text-sm">{
+                                    answerQuality === 'excellent' ? '🎯 Excellent!' :
+                                    answerQuality === 'good' ? '👍 Good!' :
+                                    answerQuality === 'fair' ? '📝 Fair' :
+                                    answerQuality === 'poor' ? '⚠️ Needs Work' :
+                                    'Waiting...'
+                                }</div>
+                            </div>
+                        </motion.div>
+
                         <div className="flex items-center gap-4 mb-12">
                             {ROUND_META.map((m, i) => (
                                 <div key={i} className="flex-1 flex flex-col gap-2">
@@ -1063,32 +1580,7 @@ export default function MockInterview() {
                                                         {['skip', 'idont know', 'next question'].map(hint => (
                                                             <button 
                                                                 key={hint} 
-                                                                onClick={async () => { 
-                                                                    if (isSending || isSpeaking) return;
-                                                                    const val = hint.toUpperCase();
-                                                                    setMessages(prev => [...prev, { role: 'user', content: val, timestamp: new Date().toLocaleTimeString() }]);
-                                                                    setIsSending(true);
-                                                                    setIsThinking(true);
-                                                                    try {
-                                                                        const res = await fetch(`${API_BASE_URL}/api/interview/chat`, {
-                                                                            method: 'POST',
-                                                                            headers: { 
-                                                                                'Content-Type': 'application/json',
-                                                                                'X-Groq-API-Key': apiKey
-                                                                            },
-                                                                            body: JSON.stringify({ session_id: sessionId, user_response: val, round_index: roundIndex })
-                                                                        });
-                                                                        const data = await res.json();
-                                                                        setIsThinking(false);
-                                                                        if (data.is_round_complete) advanceRound();
-                                                                        else {
-                                                                            setMessages(prev => [...prev, { role: 'interviewer', content: data.interviewer_text, timestamp: new Date().toLocaleTimeString() }]);
-                                                                            speak(data.interviewer_text, roundIndex);
-                                                                        }
-                                                                    } catch (e) {
-                                                                        setIsThinking(false);
-                                                                    } finally { setIsSending(false); }
-                                                                }} 
+                                                                onClick={() => handleQuickAction(hint)} 
                                                                 className="px-4 py-1.5 bg-white border border-violet-100 rounded-full text-[10px] font-black text-[#7C3AED] uppercase tracking-widest hover:bg-violet-50 transition-all shadow-sm"
                                                             >
                                                                 {hint}
@@ -1097,6 +1589,39 @@ export default function MockInterview() {
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
+                                        {/* Video/webcam removed */}
+
+                                        {historyOpen && (
+                                            <div className="fixed inset-0 bg-black/40 z-50 flex items-start justify-center p-8">
+                                                <div className="w-full max-w-3xl bg-white rounded-2xl p-6 shadow-2xl">
+                                                    <div className="flex items-center justify-between mb-4">
+                                                        <h3 className="text-lg font-black">Interview History</h3>
+                                                        <div className="flex items-center gap-2">
+                                                            <button onClick={() => { loadHistory(); }} className="px-3 py-1 bg-gray-100 rounded">Refresh</button>
+                                                            <button onClick={() => setHistoryOpen(false)} className="px-3 py-1 bg-black text-white rounded">Close</button>
+                                                        </div>
+                                                    </div>
+                                                    {history.length === 0 ? (
+                                                        <div className="text-sm text-gray-500">No past sessions found.</div>
+                                                    ) : (
+                                                        <div className="space-y-3 max-h-96 overflow-y-auto">
+                                                            {history.map((h, idx) => (
+                                                                <div key={h.id || idx} className="p-3 border rounded-lg flex items-center justify-between">
+                                                                    <div>
+                                                                        <div className="font-bold">{h.role || h.report?.sections?.[0]?.label || 'Session'}</div>
+                                                                        <div className="text-xs text-gray-500">{h.company} • {h.domain || h.companyType} • {new Date(h.date).toLocaleString()}</div>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className="text-sm font-black">{h.score ?? h.report?.overall_score}%</div>
+                                                                        <button onClick={() => { setReport(h.report); setStep('REPORT'); setHistoryOpen(false); }} className="px-3 py-1 bg-white border rounded">View</button>
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                             <div className="flex gap-4 items-center">
                                                 <textarea rows={1} className="flex-1 bg-white border border-gray-100 rounded-2xl px-8 py-4 text-sm font-medium focus:ring-0 resize-none shadow-sm" placeholder="Draft your response..." value={userInput} onChange={e => setUserInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendChat())} />
                                                 <button onClick={handleSendChat} disabled={!userInput.trim() || isSending || isSpeaking} className="w-14 h-14 bg-black text-white rounded-2xl flex items-center justify-center hover:bg-[#7C3AED] transition-all"><Send className="w-5 h-5" /></button>
@@ -1125,18 +1650,13 @@ export default function MockInterview() {
                                             </div>
                                         </div>
                                         <div className="w-1/2 flex flex-col p-16 justify-center">
-                                            <div className="bg-white/5 border border-white/10 p-10 rounded-[2.5rem] mb-12 shadow-2xl backdrop-blur-3xl">
+                                            <div className="bg-white/5 border border-white/10 p-10 rounded-[2.5rem] mb-8 shadow-2xl backdrop-blur-3xl">
                                                 <p className="text-[9px] font-black text-cyan-400 uppercase tracking-widest mb-6 underline decoration-cyan-400/30">Michael Rodriguez (HR Director) says:</p>
                                                 {messages.filter(m => m.role === 'interviewer').slice(-1).map((m, i) => (
                                                     <p key={i} className="text-xl text-white font-medium italic leading-relaxed">"{m.content}"</p>
                                                 ))}
                                             </div>
-                                             {voiceTranscript && (
-                                                <div className="bg-black/20 p-8 rounded-3xl border border-white/5 mb-8">
-                                                    <p className="text-[9px] font-black text-gray-500 uppercase tracking-widest mb-4">Transcription Engine:</p>
-                                                    <p className="text-sm text-cyan-200/60 font-medium italic">"{voiceTranscript}"</p>
-                                                </div>
-                                            )}
+
                                             <AnimatePresence>
                                                 {showHint && (
                                                     <motion.div 
@@ -1145,21 +1665,37 @@ export default function MockInterview() {
                                                         exit={{ opacity: 0, scale: 0.9 }}
                                                         className="mb-8 p-4 bg-white/5 border border-white/10 rounded-2xl text-center backdrop-blur-md"
                                                     >
-                                                        <p className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] mb-4">Stuck? You can say:</p>
+                                                        <p className="text-[10px] font-black text-cyan-400 uppercase tracking-[0.2em] mb-4">Quick Actions</p>
                                                         <div className="flex flex-wrap justify-center gap-3">
-                                                            {['"Skip"', '"I don\'t know"', '"Next question"'].map(h => (
-                                                                <span key={h} className="px-4 py-2 bg-white/10 rounded-full text-[11px] font-bold text-white uppercase tracking-widest border border-white/10">{h}</span>
+                                                            {['skip', 'idont know', 'next question'].map(h => (
+                                                                <button key={h} onClick={() => handleQuickAction(h)} className="px-4 py-2 bg-white/10 rounded-full text-[11px] font-bold text-white uppercase tracking-widest border border-white/10 hover:bg-white/15 transition-colors">
+                                                                    {h}
+                                                                </button>
                                                             ))}
                                                         </div>
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
-                                            <div className="flex justify-center">
-                                                {!hrCallOver ? (
-                                                    <button onClick={toggleMic} disabled={isSpeaking} className={`w-24 h-24 rounded-full flex items-center justify-center shadow-3xl transition-all ${isListening ? 'bg-red-500 scale-110' : 'bg-white text-black hover:scale-105'}`}>{isListening ? <MicOff size={32} /> : <Mic size={32} />}</button>
-                                                ) : (
-                                                    <div className="bg-green-500/20 px-8 py-3 rounded-full border border-green-500/30 font-black text-green-400 text-[10px] uppercase tracking-widest">Protocol finalized</div>
-                                                )}
+
+                                            <div className="space-y-4">
+                                                <textarea
+                                                    rows={4}
+                                                    value={userInput}
+                                                    onChange={e => setUserInput(e.target.value)}
+                                                    onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSendChat())}
+                                                    placeholder="Type your HR response..."
+                                                    className="w-full bg-white text-black border border-white/10 rounded-[2rem] px-6 py-5 text-sm font-medium focus:ring-0 resize-none shadow-lg"
+                                                />
+                                                <div className="flex items-center justify-between gap-4">
+                                                    <p className="text-[10px] font-bold text-white/35 uppercase tracking-widest">Text only mode</p>
+                                                    {!hrCallOver ? (
+                                                        <button onClick={handleSendChat} disabled={!userInput.trim() || isSending || isSpeaking} className="px-6 py-4 rounded-full bg-white text-black text-[10px] font-black uppercase tracking-[0.25em] hover:scale-105 transition-transform disabled:opacity-50 disabled:cursor-not-allowed">
+                                                            Send Answer
+                                                        </button>
+                                                    ) : (
+                                                        <div className="bg-green-500/20 px-6 py-3 rounded-full border border-green-500/30 font-black text-green-400 text-[10px] uppercase tracking-widest">Protocol finalized</div>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

@@ -22,6 +22,7 @@ const SIDEBAR_ITEMS = [
   { icon: BookOpen, label: 'Micro Learning', id: 'micro' },
   { icon: BrainCircuit, label: 'Vibe with AI', id: 'vibe' },
   { icon: TrendingUp, label: 'Business Studies', id: 'business' },
+  { icon: History, label: 'History', id: 'history' },
 ];
 
 const FEATURED_VIDEOS: VideoItem[] = [
@@ -754,64 +755,6 @@ const StudOTT: React.FC = () => {
 
             {/* Home Rows (Categories) */}
             <div className="relative z-20 pb-24 px-6 lg:px-12 -mt-4 space-y-12 md:space-y-16">
-              {/* Continue Watching Row */}
-              {continueWatchingVideos.length > 0 ? (
-                <motion.div 
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                  transition={{ duration: 0.6 }}
-                  className="w-full relative group/row"
-                >
-                  <div className="flex items-center justify-between mb-4 lg:mb-5">
-                    <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2 group-hover/row:text-[#A88CFF] transition-colors">
-                      <History className="w-5 h-5 md:w-6 md:h-6 text-[#A88CFF]" />
-                      Continue Watching
-                    </h2>
-                  </div>
-                  <div className="relative group/scroll">
-                    <button 
-                      onClick={() => scrollRow('continue-watching', 'left')}
-                      className="absolute left-0 sm:-left-2 top-[40%] -translate-y-[50%] z-30 opacity-0 group-hover/scroll:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none group-hover/scroll:pointer-events-auto"
-                    >
-                      <div className="w-10 h-24 sm:w-12 sm:h-32 bg-[#141414]/95 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/10 hover:bg-white/10 hover:scale-105 transition-all shadow-2xl">
-                        <ChevronRight className="w-8 h-8 text-white rotate-180 opacity-70 hover:opacity-100" />
-                      </div>
-                    </button>
-
-                    <div 
-                      id="row-continue-watching"
-                      className="flex overflow-x-auto gap-3 md:gap-4 pb-6 pt-2 snap-x snap-mandatory pr-12 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
-                    >
-                      {continueWatchingVideos.map((vid: VideoItem) => (
-                        <div key={`cw-${vid.id}-${vid.watchedAt}`} className="w-[160px] sm:w-[200px] lg:w-[240px] xl:w-[260px] snap-center shrink-0">
-                          <VideoCard vid={vid} onPlay={handleVideoOpen} isHistory={true} />
-                        </div>
-                      ))}
-                    </div>
-
-                    <button 
-                      onClick={() => scrollRow('continue-watching', 'right')}
-                      className="absolute right-0 sm:right-2 top-[40%] -translate-y-[50%] z-30 opacity-0 group-hover/scroll:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none group-hover/scroll:pointer-events-auto"
-                    >
-                      <div className="w-10 h-24 sm:w-12 sm:h-32 bg-[#141414]/95 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/10 hover:bg-white/10 hover:scale-105 transition-all shadow-2xl">
-                        <ChevronRight className="w-8 h-8 text-white opacity-70 hover:opacity-100" />
-                      </div>
-                    </button>
-                  </div>
-                </motion.div>
-              ) : (
-                <div className="w-full relative py-2 mb-8">
-                  <div className="flex items-center gap-2 mb-4">
-                    <History className="w-5 h-5 md:w-6 md:h-6 text-gray-500" />
-                    <h2 className="text-xl md:text-2xl font-bold text-gray-500 tracking-tight">Continue Watching</h2>
-                  </div>
-                  <div className="w-full bg-[#141414]/40 border border-white/5 rounded-2xl p-6 sm:p-8 flex items-center justify-center text-center">
-                    <p className="text-gray-400 font-medium">Start exploring content to build your watch history.</p>
-                  </div>
-                </div>
-              )}
-
               {Object.entries(categories).map(([key, row], rIdx) => (
                 <motion.div 
                   initial={{ opacity: 0, y: 30 }}
@@ -873,10 +816,68 @@ const StudOTT: React.FC = () => {
                   </div>
                 </motion.div>
               ))}
+
+              {/* Continue Watching Row */}
+              {continueWatchingVideos.length > 0 ? (
+                <motion.div 
+                  initial={{ opacity: 0, y: 30 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                  transition={{ duration: 0.6 }}
+                  className="w-full relative group/row"
+                >
+                  <div className="flex items-center justify-between mb-4 lg:mb-5">
+                    <h2 className="text-xl md:text-2xl font-bold text-white tracking-tight flex items-center gap-2 group-hover/row:text-[#A88CFF] transition-colors">
+                      <History className="w-5 h-5 md:w-6 md:h-6 text-[#A88CFF]" />
+                      Continue Watching
+                    </h2>
+                  </div>
+                  <div className="relative group/scroll">
+                    <button 
+                      onClick={() => scrollRow('continue-watching', 'left')}
+                      className="absolute left-0 sm:-left-2 top-[40%] -translate-y-[50%] z-30 opacity-0 group-hover/scroll:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none group-hover/scroll:pointer-events-auto"
+                    >
+                      <div className="w-10 h-24 sm:w-12 sm:h-32 bg-[#141414]/95 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/10 hover:bg-white/10 hover:scale-105 transition-all shadow-2xl">
+                        <ChevronRight className="w-8 h-8 text-white rotate-180 opacity-70 hover:opacity-100" />
+                      </div>
+                    </button>
+
+                    <div 
+                      id="row-continue-watching"
+                      className="flex overflow-x-auto gap-3 md:gap-4 pb-6 pt-2 snap-x snap-mandatory pr-12 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+                    >
+                      {continueWatchingVideos.map((vid: VideoItem) => (
+                        <div key={`cw-${vid.id}-${vid.watchedAt}`} className="w-[160px] sm:w-[200px] lg:w-[240px] xl:w-[260px] snap-center shrink-0">
+                          <VideoCard vid={vid} onPlay={handleVideoOpen} isHistory={true} />
+                        </div>
+                      ))}
+                    </div>
+
+                    <button 
+                      onClick={() => scrollRow('continue-watching', 'right')}
+                      className="absolute right-0 sm:right-2 top-[40%] -translate-y-[50%] z-30 opacity-0 group-hover/scroll:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none group-hover/scroll:pointer-events-auto"
+                    >
+                      <div className="w-10 h-24 sm:w-12 sm:h-32 bg-[#141414]/95 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/10 hover:bg-white/10 hover:scale-105 transition-all shadow-2xl">
+                        <ChevronRight className="w-8 h-8 text-white opacity-70 hover:opacity-100" />
+                      </div>
+                    </button>
+                  </div>
+                </motion.div>
+              ) : (
+                <div className="w-full relative py-2 mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <History className="w-5 h-5 md:w-6 md:h-6 text-gray-500" />
+                    <h2 className="text-xl md:text-2xl font-bold text-gray-500 tracking-tight">Continue Watching</h2>
+                  </div>
+                  <div className="w-full bg-[#141414]/40 border border-white/5 rounded-2xl p-6 sm:p-8 flex items-center justify-center text-center">
+                    <p className="text-gray-400 font-medium">Start exploring content to build your watch history.</p>
+                  </div>
+                </div>
+              )}
             </div>
           </>
         ) : (
-          /* Gallery View for Specific Category */
+          /* Gallery View for Specific Category or History */
           <div className="relative pt-8 md:pt-12 pb-24 px-6 lg:px-12 min-h-[80vh]">
             <motion.div 
               initial={{ opacity: 0, y: 20 }}
@@ -884,43 +885,67 @@ const StudOTT: React.FC = () => {
               className="mb-10 lg:mb-14"
             >
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white tracking-tight mb-4 drop-shadow-2xl flex items-center gap-4">
-                {categories[activeMenu]?.title}
+                {activeMenu === 'history' ? 'History' : categories[activeMenu]?.title}
               </h1>
               <p className="text-gray-400 text-lg max-w-2xl font-medium">
-                {categories[activeMenu]?.desc}
+                {activeMenu === 'history' ? 'Your recently watched content.' : categories[activeMenu]?.desc}
               </p>
             </motion.div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
-              {categories[activeMenu]?.videos && categories[activeMenu].videos.length > 0 ? (
-                categories[activeMenu].videos.map((vid: VideoItem, idx: number) => (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.4, delay: idx * 0.05 }}
-                    key={vid.id} 
-                    className="w-full"
-                  >
-                    <VideoCard vid={vid} onPlay={handleVideoOpen} />
-                  </motion.div>
-                ))
-              ) : (
-                Array.from({ length: 12 }).map((_, idx) => (
-                  <motion.div 
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    transition={{ duration: 0.4, delay: idx * 0.05 }}
-                    key={`placeholder-${idx}`} 
-                    className="w-full"
-                  >
-                    <VideoCard 
-                      vid={{ id: `placeholder-${idx}`, category: categories[activeMenu]?.title, duration: 'TBA' }} 
-                      onPlay={handleVideoOpen} 
-                    />
-                  </motion.div>
-                ))
-              )}
-            </div>
+            {activeMenu === 'history' ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+                {continueWatchingVideos.length > 0 ? (
+                  continueWatchingVideos.map((vid: VideoItem, idx: number) => (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.4, delay: idx * 0.05 }}
+                      key={`hist-${vid.id}-${vid.watchedAt}`} 
+                      className="w-full"
+                    >
+                      <VideoCard vid={vid} onPlay={handleVideoOpen} isHistory={true} />
+                    </motion.div>
+                  ))
+                ) : (
+                  <div className="col-span-full w-full bg-[#141414]/40 border border-white/5 rounded-2xl p-12 flex flex-col items-center justify-center text-center">
+                    <History className="w-12 h-12 text-gray-500 mb-4" />
+                    <h3 className="text-xl font-bold text-white mb-2">No Watch History</h3>
+                    <p className="text-gray-400">Start exploring content to build your watch history.</p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 md:gap-6">
+                {categories[activeMenu]?.videos && categories[activeMenu].videos.length > 0 ? (
+                  categories[activeMenu].videos.map((vid: VideoItem, idx: number) => (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.4, delay: idx * 0.05 }}
+                      key={vid.id} 
+                      className="w-full"
+                    >
+                      <VideoCard vid={vid} onPlay={handleVideoOpen} />
+                    </motion.div>
+                  ))
+                ) : (
+                  Array.from({ length: 12 }).map((_, idx) => (
+                    <motion.div 
+                      initial={{ opacity: 0, scale: 0.95 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.4, delay: idx * 0.05 }}
+                      key={`placeholder-${idx}`} 
+                      className="w-full"
+                    >
+                      <VideoCard 
+                        vid={{ id: `placeholder-${idx}`, category: categories[activeMenu]?.title, duration: 'TBA' }} 
+                        onPlay={handleVideoOpen} 
+                      />
+                    </motion.div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         )}
       </main>

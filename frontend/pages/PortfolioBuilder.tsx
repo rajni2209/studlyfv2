@@ -21,6 +21,8 @@ import {
   ChevronRight,
   User,
   Star,
+  X,
+  Eye,
 } from 'lucide-react';
 
 import { API_BASE_URL } from '../apiConfig';
@@ -110,6 +112,56 @@ function FadeSection({ children, delay = 0, className = '' }: { children: React.
   );
 }
 
+/* ── Template image with graceful fallback ── */
+function TemplateImage({
+  src,
+  alt,
+  className,
+  style,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+  style?: React.CSSProperties;
+}) {
+  const [failed, setFailed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  if (failed) {
+    return (
+      <div
+        className={`${className} flex flex-col items-center justify-center bg-gradient-to-br from-gray-100 to-gray-50 border-b border-gray-200`}
+        style={style}
+      >
+        <div className="w-10 h-10 rounded-xl bg-gray-200 flex items-center justify-center mb-2">
+          <Layout size={20} className="text-gray-400" />
+        </div>
+        <p className="text-xs font-medium text-gray-400 text-center px-4 leading-relaxed">
+          Template Preview<br />Coming Soon
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative w-full h-full" style={style}>
+      {/* Skeleton shimmer while loading */}
+      {!loaded && (
+        <div className="absolute inset-0 bg-gradient-to-r from-gray-100 via-gray-50 to-gray-100 animate-pulse" />
+      )}
+      <img
+        src={src}
+        alt={alt}
+        className={`${className} transition-opacity duration-300 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+        loading="lazy"
+        decoding="async"
+        onLoad={() => setLoaded(true)}
+        onError={() => setFailed(true)}
+      />
+    </div>
+  );
+}
+
 const PortfolioBuilder: React.FC = () => {
   const location = useLocation();
   const [step, setStep] = useState(1);
@@ -123,6 +175,8 @@ const PortfolioBuilder: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
+  // ── Preview modal state ──
+  const [previewTemplate, setPreviewTemplate] = useState<{ id: string; name: string; desc: string; image: string; tag: string } | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -168,6 +222,10 @@ const PortfolioBuilder: React.FC = () => {
     }
     try {
       const response = await fetch(`${API_BASE_URL}/generate-portfolio/`, { method: 'POST', body: data });
+      if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Portfolio API failed (${response.status}): ${text}`);
+      }
       const result = await response.json();
       if (result.portfolio_url) {
         setGeneratedUrl(result.portfolio_url);
@@ -183,13 +241,57 @@ const PortfolioBuilder: React.FC = () => {
     }
   };
 
+  // ── Template definitions — images served from public/template-previews/ ──
+  // Drop your screenshots at:
+  //   public/template-previews/neon-glass.png
+  //   public/template-previews/swiss-minimal.png
+  //   public/template-previews/creative-clean.png
+  //   public/template-previews/editorial-dark.png
+  //   public/template-previews/ocean-minimal.png
+  //   public/template-previews/bold-grid.png
   const templates = [
-    { id: 'neon_glass', name: 'Neon Glass', desc: 'Modern futuristic developer portfolio', image: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085', tag: 'Popular' },
-    { id: 'swiss_minimal', name: 'Swiss Minimal', desc: 'Minimal clean typography aesthetic', image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3', tag: 'Elegant' },
-    { id: 'creative_clean', name: 'Creative Clean', desc: 'Creative portfolio for modern builders', image: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8', tag: 'Creative' },
-    { id: 'editorial_dark', name: 'Editorial Dark', desc: 'Premium dark portfolio with bold storytelling', image: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?auto=format&fit=crop&w=1200&q=80', tag: 'Premium' },
-    { id: 'ocean_minimal', name: 'Ocean Minimal', desc: 'Calm professional layout for clean resumes', image: 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1200&q=80', tag: 'Calm' },
-    { id: 'bold_grid', name: 'Bold Grid', desc: 'Structured grid for metrics, projects, and proof', image: 'https://images.unsplash.com/photo-1507238691740-187a5b1d37b8?auto=format&fit=crop&w=1200&q=80', tag: 'Structured' },
+    {
+      id: 'neon_glass',
+      name: 'Neon Glass',
+      desc: 'Modern futuristic developer portfolio',
+      image: '/template-previews/neon-glass.png',
+      tag: 'Popular',
+    },
+    {
+      id: 'swiss_minimal',
+      name: 'Swiss Minimal',
+      desc: 'Minimal clean typography aesthetic',
+      image: '/template-previews/swiss-minimal.png',
+      tag: 'Elegant',
+    },
+    {
+      id: 'creative_clean',
+      name: 'Creative Clean',
+      desc: 'Creative portfolio for modern builders',
+      image: '/template-previews/creative-clean.png',
+      tag: 'Creative',
+    },
+    {
+      id: 'editorial_dark',
+      name: 'Editorial Dark',
+      desc: 'Premium dark portfolio with bold storytelling',
+      image: '/template-previews/editorial-dark.png',
+      tag: 'Premium',
+    },
+    {
+      id: 'ocean_minimal',
+      name: 'Ocean Minimal',
+      desc: 'Calm professional layout for clean resumes',
+      image: '/template-previews/ocean-minimal.png',
+      tag: 'Calm',
+    },
+    {
+      id: 'bold_grid',
+      name: 'Bold Grid',
+      desc: 'Structured grid for metrics, projects, and proof',
+      image: '/template-previews/bold-grid.png',
+      tag: 'Structured',
+    },
   ];
   const scrollingTemplates = [...templates, ...templates];
 
@@ -356,7 +458,14 @@ const PortfolioBuilder: React.FC = () => {
                         whileHover={{ scale: 1.02, boxShadow: '0 28px 70px rgba(0,0,0,0.12)' }}
                         className="absolute top-4 left-6 w-[300px] rounded-2xl overflow-hidden bg-white border border-gray-200 shadow-[0_20px_60px_rgba(0,0,0,0.08),0_4px_16px_rgba(0,0,0,0.05)] cursor-default"
                       >
-                        <img src="https://images.unsplash.com/photo-1498050108023-c5249f4df085" alt="" className="w-full h-[180px] object-cover" />
+                        {/* Hero card uses the first template's real preview image */}
+                        <div className="w-full h-[180px] overflow-hidden">
+                          <TemplateImage
+                            src={templates[0].image}
+                            alt={templates[0].name}
+                            className="w-full h-[180px] object-cover object-top"
+                          />
+                        </div>
                         <div className="p-5">
                           <div className="flex items-center gap-3 mb-4">
                             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center text-white text-sm font-bold shadow-lg">AM</div>
@@ -510,14 +619,18 @@ const PortfolioBuilder: React.FC = () => {
                         transition={{ type: 'spring', stiffness: 300, damping: 20 }}
                         className="w-[300px] flex-shrink-0 rounded-2xl overflow-hidden bg-white border border-gray-200 shadow-[0_4px_20px_rgba(0,0,0,0.05)] transition-shadow duration-300"
                       >
-                        <div className="relative overflow-hidden">
-                          <motion.img
-                            src={template.image}
-                            alt={template.name}
-                            className="w-full h-[180px] object-cover"
+                        <div className="relative overflow-hidden w-full h-[180px]">
+                          <motion.div
+                            className="w-full h-full"
                             whileHover={{ scale: 1.05 }}
                             transition={{ duration: 0.4 }}
-                          />
+                          >
+                            <TemplateImage
+                              src={template.image}
+                              alt={template.name}
+                              className="w-full h-[180px] object-cover object-top"
+                            />
+                          </motion.div>
                           <span className="absolute top-3 right-3 px-2.5 py-1 rounded-lg bg-white/90 backdrop-blur-sm text-xs font-semibold text-gray-700 border border-gray-200/80">
                             {template.tag}
                           </span>
@@ -971,24 +1084,39 @@ const PortfolioBuilder: React.FC = () => {
                         : 'border-gray-200 shadow-[0_4px_20px_rgba(0,0,0,0.05)]'
                     }`}
                   >
-                    <div className="relative overflow-hidden">
-                      <motion.img
-                        src={template.image}
-                        alt={template.name}
-                        className="w-full h-[220px] object-cover"
+                    <div className="relative overflow-hidden group w-full h-[220px]">
+                      <motion.div
+                        className="w-full h-full"
                         whileHover={{ scale: 1.06 }}
                         transition={{ duration: 0.4 }}
-                      />
-                      <span className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-white/90 backdrop-blur-sm text-xs font-semibold text-gray-700 border border-white/80">
+                      >
+                        <TemplateImage
+                          src={template.image}
+                          alt={template.name}
+                          className="w-full h-[220px] object-cover object-top"
+                        />
+                      </motion.div>
+                      <span className="absolute top-3 left-3 px-2.5 py-1 rounded-lg bg-white/90 backdrop-blur-sm text-xs font-semibold text-gray-700 border border-white/80 z-10">
                         {template.tag}
                       </span>
+                      {/* Preview button — appears on hover */}
+                      <motion.button
+                        onClick={(e) => { e.stopPropagation(); setPreviewTemplate(template); }}
+                        initial={{ opacity: 0, y: 4 }}
+                        whileHover={{ opacity: 1, y: 0 }}
+                        className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/95 backdrop-blur-sm border border-white/80 text-gray-800 text-xs font-semibold shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-white z-10"
+                        style={{ pointerEvents: 'auto' }}
+                      >
+                        <Eye size={12} />
+                        Preview
+                      </motion.button>
                       <AnimatePresence>
                         {selectedTemplate === template.id && (
                           <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-purple-600/10 flex items-center justify-center"
+                            className="absolute inset-0 bg-purple-600/10 flex items-center justify-center z-20"
                           >
                             <motion.div
                               initial={{ scale: 0, rotate: -20 }}
@@ -1191,6 +1319,110 @@ const PortfolioBuilder: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
+
+      {/* ── TEMPLATE PREVIEW MODAL ── */}
+      <AnimatePresence>
+        {previewTemplate && (
+          <motion.div
+            key="preview-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+            onClick={() => setPreviewTemplate(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.92, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.94, y: 8 }}
+              transition={{ duration: 0.25, ease: [0.34, 1.2, 0.64, 1] }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-3xl bg-white rounded-2xl overflow-hidden shadow-[0_32px_80px_rgba(0,0,0,0.25)] border border-gray-200"
+            >
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+                <div className="flex items-center gap-3">
+                  <span className="px-2.5 py-1 rounded-lg bg-purple-50 border border-purple-100 text-purple-700 text-xs font-semibold">
+                    {previewTemplate.tag}
+                  </span>
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-sm">{previewTemplate.name}</h3>
+                    <p className="text-xs text-gray-500">{previewTemplate.desc}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <motion.button
+                    whileHover={{ scale: 1.04, boxShadow: '0 6px 20px rgba(124,58,237,0.25)' }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={() => { setSelectedTemplate(previewTemplate.id); setPreviewTemplate(null); }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-semibold transition-colors duration-200"
+                  >
+                    <Check size={13} />
+                    Use this template
+                  </motion.button>
+                  <motion.button
+                    whileHover={{ scale: 1.05, backgroundColor: '#f3f4f6' }}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => setPreviewTemplate(null)}
+                    className="p-2 rounded-xl text-gray-400 hover:text-gray-700 transition-colors duration-200"
+                  >
+                    <X size={18} />
+                  </motion.button>
+                </div>
+              </div>
+
+              {/* Modal image */}
+              <div className="relative overflow-hidden bg-gray-50" style={{ maxHeight: '60vh' }}>
+                <div style={{ maxHeight: '60vh', overflow: 'hidden' }}>
+                  <TemplateImage
+                    src={previewTemplate.image}
+                    alt={previewTemplate.name}
+                    className="w-full object-cover object-top"
+                    style={{ maxHeight: '60vh' }}
+                  />
+                </div>
+                {/* Subtle bottom fade */}
+                <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white/60 to-transparent pointer-events-none" />
+              </div>
+
+              {/* Modal footer */}
+              <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
+                <p className="text-xs text-gray-400">Click outside or press Esc to close</p>
+                <div className="flex items-center gap-2">
+                  {/* Prev / Next template navigation */}
+                  {(() => {
+                    const currentIdx = templates.findIndex(t => t.id === previewTemplate.id);
+                    const prevT = templates[(currentIdx - 1 + templates.length) % templates.length];
+                    const nextT = templates[(currentIdx + 1) % templates.length];
+                    return (
+                      <>
+                        <motion.button
+                          whileHover={{ scale: 1.04 }}
+                          whileTap={{ scale: 0.96 }}
+                          onClick={() => setPreviewTemplate(prevT)}
+                          className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                        >
+                          ← {prevT.name}
+                        </motion.button>
+                        <motion.button
+                          whileHover={{ scale: 1.04 }}
+                          whileTap={{ scale: 0.96 }}
+                          onClick={() => setPreviewTemplate(nextT)}
+                          className="px-3 py-1.5 rounded-lg border border-gray-200 bg-white text-xs font-semibold text-gray-600 hover:text-gray-900 transition-colors"
+                        >
+                          {nextT.name} →
+                        </motion.button>
+                      </>
+                    );
+                  })()}
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };

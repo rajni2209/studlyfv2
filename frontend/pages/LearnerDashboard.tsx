@@ -7,7 +7,7 @@ import { useAuth } from '../AuthContext';
 import DashboardFooter from '../components/DashboardFooter';
 import MyProfile from './MyProfile';
 import { downloadCertPDF } from '../utils/downloadCertPDF';
-import { generatePdfHtml } from './ResumeBuilder';
+import { generatePdfHtml } from '../utils/resumePdf';
 import { Plus, Sparkles, GraduationCap, Briefcase } from 'lucide-react';
 // @ts-ignore
 import html2pdf from "html2pdf.js";

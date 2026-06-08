@@ -80,7 +80,7 @@ const RightHoverPanel: React.FC = () => {
   };
 
   return (
-    <div className="w-full pointer-events-auto">
+    <div className="relative w-full pointer-events-auto">
       {/* Always-visible fixed handle for the guide when closed */}
       {!open && (
         <button

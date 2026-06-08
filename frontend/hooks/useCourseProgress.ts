@@ -77,9 +77,14 @@ export default function useCourseProgress({ userId, courseId }: UseCourseProgres
       if (modIdx > 0 && !isModuleComplete(modIdx - 1)) {
         return true;
       }
-      // Linear lesson unlocking
+      // Linear lesson unlocking: ensure all prior lessons in this module are completed
       if (lessonIdx > 0) {
-        return !completedSteps[`${modIdx}_${lessonIdx - 1}`];
+        for (let i = 0; i < lessonIdx; i++) {
+          if (!completedSteps[`${modIdx}_${i}`]) {
+            return true;
+          }
+        }
+        return false;
       }
       return false;
     },

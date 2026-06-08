@@ -10,6 +10,7 @@ import {
   Briefcase, GraduationCap, LayoutDashboard, BrainCircuit, Play, Globe, X
 } from 'lucide-react';
 import { GENERATIVE_AI_CURRICULUM } from '../data/courseCurriculum';
+import { getCurriculumData } from '../data/curriculumData';
 import DashboardFooter from '../components/DashboardFooter';
 
 interface Course {
@@ -84,6 +85,22 @@ const MOCK_COURSES: Course[] = [
     price: 799,
     rating: 4.6,
     total_reviews: 945,
+  },
+  {
+    _id: 'ai-automation-mastery',
+    title: 'AI Automation Mastery',
+    description: 'Learn to build powerful AI-driven automation workflows and autonomous agents.',
+    role_tag: 'AI Automation',
+    difficulty: 'Advanced',
+    skills: ['AI Automation', 'LangChain', 'OpenAI', 'Autonomous Agents', 'Workflow Building'],
+    duration: '10.5 hrs',
+    image: '/images/ai_automation_mastery_thumbnail_1780568107343.png',
+    price: 899,
+    rating: 4.9,
+    total_reviews: 1200,
+    total_hours: 10.5,
+    instructor: 'Adarsh Singh',
+    is_bestseller: true
   }
 ];
 
@@ -150,8 +167,12 @@ const CourseDetail: React.FC = () => {
         setCourse(foundCourse);
 
         try {
-          // Force use of the rich curriculum instead of the backend's dummy data
-          setCourseModules(GENERATIVE_AI_CURRICULUM);
+          if (foundCourse._id === 'ai-automation-mastery') {
+            setCourseModules(getCurriculumData('ai-automation-mastery') as any[]);
+          } else {
+            // Force use of the rich curriculum instead of the backend's dummy data
+            setCourseModules(GENERATIVE_AI_CURRICULUM);
+          }
         } catch (modErr) {
           setCourseModules(GENERATIVE_AI_CURRICULUM);
         }
@@ -221,12 +242,15 @@ const CourseDetail: React.FC = () => {
               </div>
 
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-white leading-[1.1] tracking-tight mb-6">
-                Generative <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#8B5CF6] to-[#D946EF]">AI Course</span>
+                {course.title.includes('Generative') ? (
+                  <>Generative <br /><span className="text-transparent bg-clip-text bg-gradient-to-r from-[#8B5CF6] to-[#D946EF]">AI Course</span></>
+                ) : (
+                  <>{course.title}</>
+                )}
               </h1>
 
-              <p className="text-lg text-gray-300 mb-8 max-w-2xl leading-relaxed">Your complete beginner-to-advanced roadmap to understand, build and apply AI in real-world scenarios using modern tools.</p>
-              <img loading="lazy" src="/images/ai_foundations_1779792498429.png" alt="AI Foundations" className="my-6 rounded-lg" />
+              <p className="text-lg text-gray-300 mb-8 max-w-2xl leading-relaxed">{course.description}</p>
+              <img loading="lazy" src={course._id === 'ai-automation-mastery' ? '/images/ai_automation_mastery_banner_1780568085202.png' : '/images/ai_foundations_1779792498429.png'} alt={course.title} className="my-6 rounded-lg" />
 
               <div className="flex flex-wrap gap-3 mb-10">
                 {(course.skills || []).map((skill, idx) => (

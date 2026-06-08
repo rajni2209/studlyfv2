@@ -1,6 +1,8 @@
 // curriculumData.ts
 // Curriculum data sourced from the GEN AI Course PDF.
 // Do not modify UI components; this file provides data consumed by CoursePlayer.
+import aiAutomationMastery from './aiAutomationMastery.json';
+
 
 export interface Topic {
   type: 'overview' | 'text' | 'practice_quiz' | 'graded_quiz' | 'image';
@@ -1138,3 +1140,10 @@ Now it's your turn to apply what you've learned! Build a simple web-based image 
     ],
   },
 ];
+
+export const getCurriculumData = (courseId: string): ModuleData[] => {
+  if (courseId && courseId.includes('ai-automation-mastery')) {
+    return aiAutomationMastery as ModuleData[];
+  }
+  return CURRICULUM_DATA;
+};

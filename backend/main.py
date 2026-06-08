@@ -617,7 +617,7 @@ async def upload_temp_image(request: Request, file: UploadFile = File(...), publ
 from models import Institution, Event, Participant, Team, Submission, Judge, Score, Notification, LeaderboardEntry, Certificate
 from services.email_service import send_notification_email, get_registration_template, get_email_verification_template
 from auth_utils import get_password_hash, verify_password, create_access_token, decode_access_token
-# import upgrade_routes
+# from routes import upgrade_routes
 import integration_routes
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -918,6 +918,9 @@ async def get_user_badges(user_id: str):
 
 # Base URL for backend links (portfolios, resumes)
 BASE_URL = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+BASE_DIR = os.path.dirname(__file__)
+PORTFOLIO_DIR = os.path.join(BASE_DIR, "generated_portfolios")
+TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
 
 # CORS already configured at the top
 
@@ -1924,8 +1927,8 @@ async def generate_portfolio(
     short_id = str(uuid.uuid4())[:8]
     filename = f"{sanitized_name}-{short_id}.json"
     
-    os.makedirs("generated_portfolios", exist_ok=True)
-    output_path = os.path.join("generated_portfolios", filename)
+    os.makedirs(PORTFOLIO_DIR, exist_ok=True)
+    output_path = os.path.join(PORTFOLIO_DIR, filename)
     
     with open(output_path, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
@@ -1962,7 +1965,7 @@ async def update_portfolio(request: UpdatePortfolioRequest):
     elif not base_name.endswith(".json"):
         base_name = base_name + ".json"
          
-    file_path = os.path.join("generated_portfolios", base_name)
+    file_path = os.path.join(PORTFOLIO_DIR, base_name)
     if not os.path.exists(file_path):
         return {"error": "Portfolio not found"}
         
@@ -1979,9 +1982,9 @@ async def view_portfolio(filename: str):
          
     # Backward compatibility: Check if legacy html file exists and return it
     if filename.endswith(".html"):
-        legacy_path = os.path.join("generated_portfolios", filename)
+        legacy_path = os.path.join(PORTFOLIO_DIR, filename)
         json_filename = filename[:-5] + ".json"
-        json_path = os.path.join("generated_portfolios", json_filename)
+        json_path = os.path.join(PORTFOLIO_DIR, json_filename)
         if not os.path.exists(json_path) and os.path.exists(legacy_path):
             from fastapi.responses import HTMLResponse
             with open(legacy_path, "r", encoding="utf-8") as f:
@@ -1992,12 +1995,12 @@ async def view_portfolio(filename: str):
             json_filename = filename
         else:
             json_filename = filename + ".json"
-        json_path = os.path.join("generated_portfolios", json_filename)
+        json_path = os.path.join(PORTFOLIO_DIR, json_filename)
         
     if not os.path.exists(json_path):
         # Fallback to check if legacy .html exists
         html_filename = filename if filename.endswith(".html") else filename + ".html"
-        html_path = os.path.join("generated_portfolios", html_filename)
+        html_path = os.path.join(PORTFOLIO_DIR, html_filename)
         if os.path.exists(html_path):
             from fastapi.responses import HTMLResponse
             with open(html_path, "r", encoding="utf-8") as f:
@@ -2011,7 +2014,7 @@ async def view_portfolio(filename: str):
         
     template_id = portfolio_data.get("template_id", "neon_glass")
     template_filename = TEMPLATE_MAP.get(template_id, "neon_glass.html")
-    template_path = os.path.join("templates", template_filename)
+    template_path = os.path.join(TEMPLATE_DIR, template_filename)
     
     if not os.path.exists(template_path):
         return {"error": "Template file not found"}
@@ -3732,27 +3735,39 @@ async def get_interview_report(session_id: str):
     }
 
     try:
-        grok_report = grok_json([
-            {"role": "system", "content": "You are an expert interview evaluator. Return valid JSON only."},
-            {"role": "user", "content": report_prompt},
-        ], temperature=0.2, max_tokens=700)
+        import asyncio
+        # Use timeout for grok call - if it takes too long, use fallback
+        try:
+            grok_report = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: grok_json([
+                        {"role": "system", "content": "You are an expert interview evaluator. Return valid JSON only."},
+                        {"role": "user", "content": report_prompt},
+                    ], temperature=0.2, max_tokens=700)
+                ),
+                timeout=10.0  # 10 second timeout
+            )
 
-        # Validate sections more thoroughly
-        grok_sections = grok_report.get("sections")
-        valid_sections = fallback_report["sections"]
-        if isinstance(grok_sections, list) and len(grok_sections) > 0:
-            # Check if each section has required fields
-            if all(isinstance(s, dict) and "label" in s and "score" in s and "feedback" in s for s in grok_sections):
-                valid_sections = grok_sections
+            # Validate sections more thoroughly
+            grok_sections = grok_report.get("sections")
+            valid_sections = fallback_report["sections"]
+            if isinstance(grok_sections, list) and len(grok_sections) > 0:
+                # Check if each section has required fields
+                if all(isinstance(s, dict) and "label" in s and "score" in s and "feedback" in s for s in grok_sections):
+                    valid_sections = grok_sections
 
-        report = {
-            "overall_score": int(grok_report.get("overall_score", fallback_report["overall_score"])),
-            "sections": valid_sections,
-            "detailed_analysis": detailed_analysis,
-            "strengths": grok_report.get("strengths") if isinstance(grok_report.get("strengths"), list) and grok_report.get("strengths") else fallback_report["strengths"],
-            "weaknesses": grok_report.get("weaknesses") if isinstance(grok_report.get("weaknesses"), list) and grok_report.get("weaknesses") else fallback_report["weaknesses"],
-            "verdict": str(grok_report.get("verdict") or fallback_report["verdict"]),
-        }
+            report = {
+                "overall_score": int(grok_report.get("overall_score", fallback_report["overall_score"])),
+                "sections": valid_sections,
+                "detailed_analysis": detailed_analysis,
+                "strengths": grok_report.get("strengths") if isinstance(grok_report.get("strengths"), list) and grok_report.get("strengths") else fallback_report["strengths"],
+                "weaknesses": grok_report.get("weaknesses") if isinstance(grok_report.get("weaknesses"), list) and grok_report.get("weaknesses") else fallback_report["weaknesses"],
+                "verdict": str(grok_report.get("verdict") or fallback_report["verdict"]),
+            }
+        except asyncio.TimeoutError:
+            print(f"Report Generation Timeout (10s) - Using fallback report")
+            report = {**fallback_report, "detailed_analysis": detailed_analysis}
     except Exception as e:
         print(f"Report Generation Error: {e}")
         report = {**fallback_report, "detailed_analysis": detailed_analysis}

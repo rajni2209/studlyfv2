@@ -12,10 +12,10 @@ import { atomDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
   ChevronDown, ChevronLeft, ChevronRight, FileText, HelpCircle,
   CheckCircle2, Menu, X, BookOpen, MessageCircle, StickyNote,
-  AlignLeft, Code, Award, Trophy, ShieldAlert, Link, AlertTriangle, Link as LinkIcon, FileText as FileTextIcon, PlayCircle as PlayCircleIcon, Code2 as Code2Icon, Download as DownloadIcon
+  AlignLeft, Code, Award, Trophy, ShieldAlert, Link, AlertTriangle, Link as LinkIcon, FileText as FileTextIcon, PlayCircle as PlayCircleIcon, Code2 as Code2Icon, Download as DownloadIcon, Lock
 } from 'lucide-react';
 import { ResourcesTab } from '../components/ResourcesTab';
-import { CURRICULUM_DATA } from '../data/curriculumData';
+import { getCurriculumData } from '../data/curriculumData';
 
 /* ═══════ Types ═══════ */
 interface Lesson {
@@ -85,6 +85,7 @@ const CoursePlayer: React.FC = () => {
 
   const [modules, setModules] = useState<Module[]>([]);
   const resolvedCourseId = extractCourseId(courseId);
+  const courseCurriculum = useMemo(() => getCurriculumData(resolvedCourseId), [resolvedCourseId]);
 
   const [activeModuleIndex, setActiveModuleIndex] = useState(() => {
     const saved = localStorage.getItem(`studlyf_last_module_${resolvedCourseId}`);
@@ -196,18 +197,28 @@ const CoursePlayer: React.FC = () => {
         fetch(`${API_BASE_URL}/api/course/${resolvedCourseId}/details?user_id=${user?.uid || ''}`)
       ]);
 
-      const data = await modulesRes.json();
-      let cData: any = null;
+      const data = await modulesRes.json().catch(() => []);
+      let cData: any = { title: 'Course' };
       if (courseRes.ok) {
-        cData = await courseRes.json();
-        setCourseData(cData);
+        try {
+          cData = await courseRes.json();
+        } catch(e) {}
       }
+      setCourseData(cData);
 
       let fetched = Array.isArray(data) ? data : [];
 
-      // Enforce the dynamic subtopics schema using the imported CURRICULUM_DATA
+      // Fallback for courses without backend modules
+      if (fetched.length === 0 && courseCurriculum && courseCurriculum.length > 0) {
+        fetched = courseCurriculum.map((_, i) => ({
+          _id: `dummy-mod-${i}`,
+          progress: null
+        }));
+      }
+
+      // Enforce the dynamic subtopics schema using the imported curriculum
       const formatted = fetched.map((mod: any, i: number) => {
-        const curChapter = CURRICULUM_DATA[i] || CURRICULUM_DATA[i % CURRICULUM_DATA.length];
+        const curChapter = courseCurriculum[i] || courseCurriculum[i % courseCurriculum.length];
         return {
           ...mod,
           title: curChapter.title,
@@ -225,7 +236,7 @@ const CoursePlayer: React.FC = () => {
         const p = mod.progress;
         if (p) {
           if (p.status === 'completed') {
-            const curChapter = CURRICULUM_DATA[modIdx] || CURRICULUM_DATA[modIdx % CURRICULUM_DATA.length];
+            const curChapter = courseCurriculum[modIdx] || courseCurriculum[modIdx % courseCurriculum.length];
             curChapter.topics.forEach((_, tIdx) => {
               initialCompleted[`${modIdx}_${tIdx}`] = true;
             });
@@ -255,12 +266,33 @@ const CoursePlayer: React.FC = () => {
       setModules(formatted);
       setLoading(false);
       return formatted;
-    } catch {
-      setModules([]);
+    } catch (err) {
+      console.error('Error fetching modules:', err);
+      let fetched: any[] = [];
+      if (courseCurriculum && courseCurriculum.length > 0) {
+        fetched = courseCurriculum.map((_, i) => ({
+          _id: `dummy-mod-${i}`,
+          progress: null
+        }));
+      }
+      const formatted = fetched.map((mod: any, i: number) => {
+        const curChapter = courseCurriculum[i] || courseCurriculum[i % courseCurriculum.length];
+        return {
+          ...mod,
+          title: curChapter?.title || `Module ${i + 1}`,
+          order_index: i + 1,
+          lessons: curChapter?.topics?.map((t: any) => ({
+            type: t.type,
+            title: t.title,
+          })) || [],
+        };
+      });
+      setCourseData({ title: 'Course' });
+      setModules(formatted);
       setLoading(false);
-      return [];
+      return formatted;
     }
-  }, [resolvedCourseId, user]);
+  }, [resolvedCourseId, user, courseCurriculum]);
 
   // ✅ PERF FIX: Track last fetched module to avoid redundant detail fetches
   const lastFetchedModuleIdRef = useRef<string | null>(null);
@@ -296,7 +328,7 @@ const CoursePlayer: React.FC = () => {
     setModuleDetails(data);
     
     // Fetch dynamic questions count from the current chapter topic
-    const activeChapter = CURRICULUM_DATA[activeModuleIndex] || CURRICULUM_DATA[activeModuleIndex % CURRICULUM_DATA.length];
+    const activeChapter = courseCurriculum[activeModuleIndex] || courseCurriculum[activeModuleIndex % courseCurriculum.length];
     const quizTopic = activeChapter?.topics?.find(t => t.type === 'graded_quiz');
     const gradedQs = quizTopic?.graded || [];
     setQuizAnswers(gradedQs.map(() => []));
@@ -343,7 +375,7 @@ const CoursePlayer: React.FC = () => {
     }
   };
 
-  const activeChapterData = CURRICULUM_DATA[activeModuleIndex] || CURRICULUM_DATA[activeModuleIndex % CURRICULUM_DATA.length];
+  const activeChapterData = courseCurriculum[activeModuleIndex] || courseCurriculum[activeModuleIndex % courseCurriculum.length];
   const activeTopicData = activeChapterData?.topics?.[activeLessonIndex];
 
   /* ── Graded Quiz Submission ── */
@@ -526,7 +558,7 @@ const CoursePlayer: React.FC = () => {
     </div>
   );
 
-  if (!courseData && !loading) return (
+  if (!courseData && !loading && !modules.length) return (
     <div className="cp-empty">
       <h2>Course Not Found</h2>
       <p>The course data could not be loaded. Please check back later.</p>
@@ -591,7 +623,7 @@ const CoursePlayer: React.FC = () => {
             const isExpanded = expandedModules.has(modIdx);
             
             // Enforce Coursera sequential module locking
-            let isLocked = false; // Modules are always visible regardless of completion
+            const isLocked = modIdx > 0 && !isModuleComplete(modIdx - 1);
             
             const isCompleted = isModuleComplete(modIdx);
             const modProgress = getModuleProgressPercent(modIdx);
@@ -608,6 +640,7 @@ const CoursePlayer: React.FC = () => {
                     <div className={`cp-module-number ${isCompleted ? 'completed' : modIdx === activeModuleIndex ? 'active' : ''}`}>
                       {isCompleted ? <CheckCircle2 size={14} /> : mod.order_index}
                     </div>
+                    {isLocked && <Lock size={16} className="cp-module-lock-icon" />}
                     <div className="cp-module-info">
                       <div className="cp-module-name">{mod?.title}</div>
                       <div className="cp-module-meta">
@@ -623,6 +656,7 @@ const CoursePlayer: React.FC = () => {
                     <div className="cp-module-progress-mini-fill" style={{ width: `${modProgress}%` }} />
                   </div>
                 )}
+                {isLocked && <span className="cp-module-locked-text">Locked</span>}
 
                 {mod.lessons && mod.lessons.length > 0 && (
                   <div className="cp-lesson-list">
@@ -632,6 +666,7 @@ const CoursePlayer: React.FC = () => {
                       const done = !!completedSteps[`${modIdx}_${lessonIdx}`];
                       const locked = isLocked || isLessonLocked(modIdx, lessonIdx);
                       const Icon = (type === 'overview' || type === 'text' || type === 'theory') ? FileText : HelpCircle;
+                      
                       return (
                         <button
                           key={lessonIdx}
@@ -649,6 +684,7 @@ const CoursePlayer: React.FC = () => {
                             scrollContentTop();
                           }}
                         >
+                          {locked && <Lock size={16} className="cp-lesson-lock-icon" />}
                           <Icon size={16} className="cp-lesson-icon" />
                           <span className="cp-lesson-name">{les?.title}</span>
                           {done ? (
@@ -883,7 +919,7 @@ const CoursePlayer: React.FC = () => {
                       </p>
                     </div>
 
-                    {activeContentDb.practice.map((q: any, qIdx: number) => {
+                    {(activeContentDb.practice || []).map((q: any, qIdx: number) => {
                       const selectedIdx = practiceAnswers[`${activeModuleIndex}_${qIdx}`];
                       const hasSelected = selectedIdx !== undefined;
 
