@@ -17,6 +17,24 @@ if (import.meta.env.DEV || (typeof window !== 'undefined' && (window.location.ho
     resolvedUrl = resolveDefaultApiBaseUrl();
 }
 
+// Request deduplication cache
+const inFlightRequests: Record<string, Promise<Response>> = {};
+
+export const deduplicatedFetch = async (url: string, options: RequestInit = {}) => {
+    const key = `${options.method || 'GET'}:${url}`;
+    
+    if (inFlightRequests[key]) {
+        return inFlightRequests[key];
+    }
+
+    const fetchPromise = fetch(url, options).finally(() => {
+        delete inFlightRequests[key];
+    });
+
+    inFlightRequests[key] = fetchPromise;
+    return fetchPromise;
+};
+
 export const API_BASE_URL = resolvedUrl;
 
 export const FRONTEND_URL =

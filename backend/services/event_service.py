@@ -123,19 +123,25 @@ async def get_all_events(filters: dict = {}):
     
     cursor = events_col.find(filters)
     events = []
+    event_ids = []
+    
     async for doc in cursor:
         doc["_id"] = str(doc["_id"])
         events.append(doc)
-        
-        # Auto-sync LIVE events to opportunities in background (non-blocking)
         if str(doc.get("status", "")).upper() in ("LIVE", "PUBLISHED", "ACTIVE", "UPCOMING"):
-            try:
-                existing = await opportunities_col.find_one({"event_link_id": str(doc["_id"])})
-                if not existing:
-                    # Queue for background sync
-                    asyncio.create_task(_create_opportunity_for_event(doc, opportunities_col))
-            except:
-                pass
+            event_ids.append(doc["_id"])
+            
+    # Bulk check for existing opportunities to fix N+1 query issue
+    existing_link_ids = set()
+    if event_ids:
+        async for opp in opportunities_col.find({"event_link_id": {"$in": event_ids}}, {"event_link_id": 1}):
+            existing_link_ids.add(opp["event_link_id"])
+            
+    # Queue sync for events that don't have a linked opportunity
+    for doc in events:
+        eid = doc["_id"]
+        if eid in event_ids and eid not in existing_link_ids:
+            asyncio.create_task(_create_opportunity_for_event(doc, opportunities_col))
     
     return events
 

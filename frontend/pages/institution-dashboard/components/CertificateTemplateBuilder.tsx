@@ -113,7 +113,7 @@ const CertificateTemplateBuilder: React.FC<{ institutionId: string; onSave?: (da
     setSaving(true);
     try {
       const selected = CERT_TEMPLATES.find(t => t.id === selectedId);
-      const response = await fetch(`${API_BASE_URL}/api/admin/cert-templates`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/institution/cert-templates`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
         body: JSON.stringify({

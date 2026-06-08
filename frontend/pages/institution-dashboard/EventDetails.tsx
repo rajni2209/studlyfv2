@@ -646,19 +646,16 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
                 
                 // Parallelize all other data fetches
                 const fetchPromises = [
-                    fetch(`${API_BASE_URL}/api/v1/institution/events/${eventId}/participants`, { headers: { ...authHeaders() } }).then(r => r.json()).catch(() => []),
-                    fetch(`${API_BASE_URL}/api/v1/institution/events/${eventId}/quizzes`, { headers: { ...authHeaders() } }).then(r => r.json()).catch(() => []),
-                    fetch(`${API_BASE_URL}/api/v1/institution/events/${eventId}/teams`, { headers: { ...authHeaders() } }).then(r => r.json()).catch(() => []),
-                    fetch(`${API_BASE_URL}/api/v1/institution/events/${eventId}/submissions`, { headers: { ...authHeaders() } }).then(r => r.json()).catch(() => []),
+                    fetch(`${API_BASE_URL}/api/v1/events/${eventId}/dashboard-data`, { headers: { ...authHeaders() } }).then(r => r.json()).catch(() => ({ participants: [], quizzes: [], teams: [], submissions: [] })),
                     instId ? fetch(`${API_BASE_URL}/api/v1/institution/profile/${instId}`, { headers: { ...authHeaders() } }).then(r => r.json()).catch(() => null) : Promise.resolve(null),
                 ];
 
-                const [partData, quizData, teamsData, subData, instData] = await Promise.all(fetchPromises);
+                const [dashboardData, instData] = await Promise.all(fetchPromises);
 
-                setParticipants(Array.isArray(partData) ? partData : []);
-                setQuizzes(quizData || []);
-                setTeams(Array.isArray(teamsData) ? teamsData : []);
-                setSubmissions(Array.isArray(subData) ? subData : []);
+                setParticipants(Array.isArray(dashboardData.participants) ? dashboardData.participants : []);
+                setQuizzes(dashboardData.quizzes || []);
+                setTeams(Array.isArray(dashboardData.teams) ? dashboardData.teams : []);
+                setSubmissions(Array.isArray(dashboardData.submissions) ? dashboardData.submissions : []);
                 setInstitution(instData);
 
                 // Secondary parallel fetch for admin-specific data if needed
@@ -1714,7 +1711,6 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
         { id: 'pipeline', label: 'Pipeline', icon: Zap },
         ...(hackathonPackageEnabled ? [{ id: 'package', label: 'Event Package', icon: Lightbulb }] : []),
         { id: 'judges', label: 'Judges', icon: Gavel },
-        { id: 'email-templates', label: 'Communications', icon: Mail },
     ];
 
     

@@ -2033,6 +2033,42 @@ async def generate_event_certificates(event_id: str, rankings: list):
     return await certificate_service.issue_ranked_event_certificates(event_id, rankings, send_email=True)
 
 
+@router.get("/cert-templates")
+async def list_cert_templates_for_institution(user: dict = Depends(get_auth_user)):
+    """Institution-scoped: list all certificate templates (built-in + custom).
+    Unlike /api/admin/cert-templates, this uses institution JWT auth instead of super-admin."""
+    cert_templates_col = db["cert_templates"]
+    results = []
+    async for doc in cert_templates_col.find({}):
+        doc["_id"] = str(doc["_id"])
+        results.append(doc)
+    builtins = [
+        {"template_id": "standard", "name": "Standard (Default)", "description": "Studlyf default certificate", "is_builtin": True},
+        {"template_id": "honors",   "name": "Elite Honors",        "description": "Purple honours certificate",  "is_builtin": True},
+    ]
+    return builtins + results
+
+
+@router.post("/cert-templates")
+async def create_cert_template_for_institution(payload: dict = Body(...), user: dict = Depends(get_auth_user)):
+    """Institution-scoped: create a new certificate template.
+    Uses institution JWT auth instead of super-admin."""
+    cert_templates_col = db["cert_templates"]
+    template_id = str(uuid.uuid4())[:8]
+    doc = {
+        "template_id": template_id,
+        "name": payload.get("name", "Certificate Template"),
+        "html_content": payload.get("html_content", ""),
+        "description": payload.get("description", ""),
+        "preview_thumbnail": payload.get("preview_thumbnail", ""),
+        "created_at": datetime.utcnow().isoformat(),
+        "created_by": str(user.get("user_id") or user.get("email") or ""),
+        "is_builtin": False,
+    }
+    await cert_templates_col.insert_one(doc)
+    doc["_id"] = str(doc.get("_id", ""))
+    return doc
+
 @router.get("/institution/certificates/{institution_id}")
 async def list_institution_certificates(institution_id: str, user: dict = Depends(get_auth_user)):
     """Return all event certificates issued for an institution."""
@@ -6219,14 +6255,22 @@ async def reset_email_templates_to_default(
 
 @router.get("/events-db-only/{institution_id}")
 async def get_institution_events_db_only(institution_id: str, user: dict = Depends(get_auth_user)):
-    """Raw `events` collection rows only (no merged opportunities). Prefer `/events/{id}` for dashboards."""
+    """Raw `events` collection rows only."""
+    from db import events_col
     assert_institution_scope(institution_id, user)
     try:
-        cursor = db.events.find({"institution_id": institution_id})
-        events = [fix_id(e) async for e in cursor]
+        # Use events_col instead of db.events for consistency
+        cursor = events_col.find({"institution_id": institution_id})
+        # Simplified async list comprehension
+        events = []
+        async for e in cursor:
+            # Handle MongoDB _id conversion manually
+            e["_id"] = str(e["_id"])
+            events.append(e)
         return events
     except Exception as e:
-        return {"error": str(e)}, 500
+        print(f"Error fetching events for {institution_id}: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 def _stage_unlock_email_html(participant_name: str, event_title: str, org_name: str, stage_name: str, unlock_time: str, stage_link: str) -> str:

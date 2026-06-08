@@ -144,13 +144,7 @@ const JudgeManagement: React.FC = () => {
                         >
                             <div className="flex justify-between items-start mb-6">
                                 <div className="w-14 h-14 bg-purple-50 rounded-2xl flex items-center justify-center text-[#6C3BFF] font-black text-xl border border-purple-100">
-                                    {React.createElement('div', { 
-                                        dangerouslySetInnerHTML: { 
-                                            __html: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                        <path d="${getJudgeStatusIcon(judge.status || 'pending')}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                                                    </svg>`
-                                                }
-                                            })}
+                                    <Mail size={24} />
                                 </div>
                                 <div className="flex gap-2">
                                     <button 

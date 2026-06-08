@@ -595,32 +595,82 @@ async def add_xp(data: dict = Body(...), user: dict = Depends(get_auth_user)):
     return {"xp": record.get("xp", 0) + amount if record else amount, "level": level}
 
 
+# ─── AGGREGATED DASHBOARD ──────────────────────────────────────────────────────
+
+@router.get("/dashboard-summary")
+async def get_dashboard_summary(user: dict = Depends(get_auth_user)):
+    user_id = user.get("user_id")
+    from db import certificates_col, resumes_col, enrollments_col, skill_assessments_col
+    
+    # Define parallel tasks
+    tasks = [
+        user_stats_col.find_one({"user_id": user_id}),
+        users_col.find_one({"user_id": user_id}),
+        certificates_col.count_documents({"user_id": user_id}) if certificates_col is not None else 0,
+        resumes_col.find_one({"user_id": user_id}) if resumes_col is not None else None,
+        enrollments_col.count_documents({"user_id": user_id}) if enrollments_col is not None else 0,
+        skill_assessments_col.count_documents({"user_id": user_id}) if skill_assessments_col is not None else 0
+    ]
+    
+    # Execute in parallel
+    results = await asyncio.gather(*tasks)
+    stats, profile, cert_count, resume_doc, course_count, skill_count = results
+    
+    if not stats:
+        # Calculate dynamic values if stats document doesn't exist
+        profile_strength = 0
+        if profile:
+            if profile.get("full_name"): profile_strength += 25
+            if profile.get("college_name"): profile_strength += 25
+            if resume_doc: profile_strength += 25
+            if cert_count > 0: profile_strength += 25
+        else:
+            profile_strength = 88 # Default fallback
+            
+        stats = {
+            "profile_strength": profile_strength,
+            "course_progress": min(course_count * 20, 100),
+            "skill_assessments": skill_count,
+            "global_rank": 42, # Needs separate leaderboard logic
+            "certificates": cert_count,
+            "resume_exists": resume_doc is not None,
+            "courses_enrolled": course_count,
+            "top_roles": []
+        }
+    else:
+        # Ensure stats doc has current dynamic counts if they differ
+        stats["certificates"] = cert_count
+        stats["courses_enrolled"] = course_count
+        stats["skill_assessments"] = skill_count
+        stats["resume_exists"] = resume_doc is not None
+    
+    return fix_id(stats)
+
 # ─── USER STATS / LEARNER DASHBOARD ────────────────────────────────────────────
 
 @router.get("/stats/{user_id}")
 async def get_user_stats(user_id: str):
+    # This is kept for backward compatibility but calls the new logic if possible
+    # In a real refactor, we would redirect or replace this call in the frontend
     stats = await user_stats_col.find_one({"user_id": user_id})
     if not stats:
-        profile = await users_col.find_one({"user_id": user_id})
-        cert_count = 0
-        resume_exists = False
-        from db import certificates_col, resumes_col
-        if certificates_col is not None:
-            cert_count = await certificates_col.count_documents({"user_id": user_id})
-        if resumes_col is not None:
-            resume_doc = await resumes_col.find_one({"user_id": user_id})
-            resume_exists = resume_doc is not None
-        course_count = 0
-        from db import enrollments_col
-        if enrollments_col is not None:
-            course_count = await enrollments_col.count_documents({"user_id": user_id})
+        from db import certificates_col, resumes_col, enrollments_col
+        tasks = [
+            users_col.find_one({"user_id": user_id}),
+            certificates_col.count_documents({"user_id": user_id}) if certificates_col is not None else 0,
+            resumes_col.find_one({"user_id": user_id}) if resumes_col is not None else None,
+            enrollments_col.count_documents({"user_id": user_id}) if enrollments_col is not None else 0
+        ]
+        results = await asyncio.gather(*tasks)
+        profile, cert_count, resume_doc, course_count = results
+        
         stats = {
             "profile_strength": 88,
             "course_progress": min(course_count * 20, 100),
             "skill_assessments": 0,
             "global_rank": 42,
             "certificates": cert_count,
-            "resume_exists": resume_exists,
+            "resume_exists": resume_doc is not None,
             "courses_enrolled": course_count,
             "top_roles": []
         }

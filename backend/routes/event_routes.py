@@ -420,62 +420,58 @@ async def get_event_hub_data(event_id: str, user: dict = Depends(get_auth_user))
 # STAGE ACCESS CONTROL - Admin endpoints for managing participant eligibility
 # ============================================================================
 
-@router.patch("/{event_id}/participants/{user_id}/status")
-async def update_participant_status(
-    event_id: str, 
-    user_id: str, 
-    status: str = Body(embed=True),
-    user: dict = Depends(get_auth_user)
-):
+@router.get("/{event_id}/dashboard-data")
+async def get_event_dashboard_data(event_id: str, user: dict = Depends(get_auth_user)):
     """
-    Admin endpoint: Update participant status (shortlisted, rejected, pending, accepted).
-    Only admins can call this endpoint.
-    
-    Status values:
-    - pending: registered but not reviewed
-    - shortlisted: approved to proceed to submission stages
-    - accepted: same as shortlisted
-    - rejected: not allowed to proceed
+    Admin/Institution endpoint: Aggregate event dashboard data to reduce network waterfall.
     """
-    from db import participants_col
+    from db import participants_col, quizzes_col, teams_col, submissions_col
+    import logging
+    logger = logging.getLogger("event_routes")
     
-    # Verify user is admin/host
-    calling_user = user.get("user_id")
-    if not calling_user:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    
-    # Check if calling user is host/admin of this event
-    event = await events_col.find_one({"_id": ObjectId(event_id)})
-    if not event or str(event.get("institution_id")) != str(user.get("institution_id")):
-        raise HTTPException(status_code=403, detail="Only event hosts can manage participant status")
-    
-    # Validate status
-    allowed_statuses = ["pending", "shortlisted", "accepted", "rejected"]
-    if status.lower() not in allowed_statuses:
-        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {', '.join(allowed_statuses)}")
-    
-    # Update participant
+    # Robust search: try ObjectId first, then string ID
+    search_query = {"$or": []}
     try:
-        result = await participants_col.update_one(
-            {"event_id": str(event_id), "user_id": str(user_id)},
-            {"$set": {"status": status.lower(), "updated_at": datetime.utcnow()}}
-        )
+        search_query["$or"].append({"_id": ObjectId(event_id)})
+    except:
+        pass
+    search_query["$or"].append({"_id": event_id})
+    search_query["$or"].append({"event_id": event_id})
         
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Participant not found for this event")
+    # Verify event ownership
+    event = await events_col.find_one(search_query)
+    
+    if not event:
+        logger.error(f"Event not found in dashboard data endpoint: {event_id}")
+        raise HTTPException(status_code=404, detail="Event not found")
         
-        return {
-            "status": "success",
-            "message": f"Participant {user_id} marked as {status}",
-            "event_id": event_id,
-            "user_id": user_id,
-            "new_status": status.lower()
-        }
+    # Institution check - allow if super_admin or owner
+    role = str(user.get("role") or "").lower()
+    if role not in ["super_admin", "admin"]:
+        if str(event.get("institution_id")) != str(user.get("institution_id")):
+            logger.error(f"Access denied for user {user.get('user_id')} to event {event_id}")
+            raise HTTPException(status_code=403, detail="Only event hosts can view dashboard data")
         
-    except HTTPException:
-        raise
+    tasks = [
+        participants_col.find({"event_id": str(event_id)}).to_list(length=None),
+        quizzes_col.find({"event_id": str(event_id)}).to_list(length=None),
+        teams_col.find({"event_id": str(event_id)}).to_list(length=None),
+        submissions_col.find({"event_id": str(event_id)}).to_list(length=None)
+    ]
+    
+    try:
+        results = await asyncio.gather(*tasks)
+        participants, quizzes, teams, submissions = results
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Error gathering dashboard data for {event_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error gathering data: {str(e)}")
+    
+    return {
+        "participants": participants,
+        "quizzes": quizzes,
+        "teams": teams,
+        "submissions": submissions
+    }
 
 
 @router.get("/{event_id}/participants")

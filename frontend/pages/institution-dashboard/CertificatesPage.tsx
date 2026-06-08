@@ -159,7 +159,7 @@ const CertificatesPage: React.FC<CertificatesPageProps> = ({ institutionId }) =>
         if (!institutionId) return;
         (async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/api/admin/cert-templates`, { headers: { ...authHeaders() } });
+                const res = await fetch(`${API_BASE_URL}/api/v1/institution/cert-templates`, { headers: { ...authHeaders() } });
                 if (!res.ok) return;
                 const data = await res.json();
                 const mapped = (Array.isArray(data) ? data : []).map((template: any) => ({
@@ -182,7 +182,7 @@ const CertificatesPage: React.FC<CertificatesPageProps> = ({ institutionId }) =>
         (async () => {
             try {
                 setLoading(true);
-                const res = await fetch(`${API_BASE_URL}/api/v1/institution/certificates/${institutionId}`, { headers: { ...authHeaders() } });
+                const res = await fetch(`${API_BASE_URL}/api/v1/institution/institution/certificates/${institutionId}`, { headers: { ...authHeaders() } });
                 if (res.ok) setCertificates(await res.json());
             } catch (e) { console.error(e); } finally { setLoading(false); }
         })();

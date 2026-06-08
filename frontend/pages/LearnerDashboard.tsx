@@ -84,38 +84,33 @@ const LearnerDashboard: React.FC = () => {
 
   useEffect(() => {
     if (user?.user_id) {
+      // 1. Certificates
       fetch(`${API_BASE_URL}/api/certificates/${user.user_id}`)
         .then(res => res.json())
         .then(data => setCertificates(data))
         .catch(console.error);
     }
+    
     const savedData = localStorage.getItem(`github_data_${user?.user_id}`);
     if (savedData) {
       setGithubData(JSON.parse(savedData));
     }
 
-    // Fetch resume
+    // 2. Aggregated Dashboard Data
     if (user?.user_id) {
-      fetch(`${API_BASE_URL}/api/resume/${user.user_id}`)
-        .then(res => res.json())
-        .then(data => setResumeData(data))
-        .catch(console.error);
-      
-      // Fetch badges
-      fetch(`${API_BASE_URL}/api/user/${user.user_id}/badges`)
-        .then(res => res.json())
-        .then(data => setBadges(data.badges || []))
-        .catch(console.error);
-
-      // Fetch dashboard stats
-      fetch(`${API_BASE_URL}/api/user/${user.user_id}/dashboard-stats`)
+      fetch(`${API_BASE_URL}/api/student/dashboard-summary`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`
+        }
+      })
         .then(res => res.json())
         .then(data => setDashboardStats(data))
         .catch(console.error);
-
-      fetch(`${API_BASE_URL}/api/student/stats/${user.user_id}`)
+      
+      // Keep badges separate if it's a different service
+      fetch(`${API_BASE_URL}/api/user/${user.user_id}/badges`)
         .then(res => res.json())
-        .then(data => setDashboardStats((prev: any) => ({ ...prev, ...data })))
+        .then(data => setBadges(data.badges || []))
         .catch(console.error);
 
       // Fetch global leaderboard
