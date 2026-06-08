@@ -787,6 +787,11 @@ export default function ResumeBuilder() {
                 </section>
 
                 {/* ── TEMPLATE SHOWCASE ── */}
+                {/*
+                    CHANGED: Replaced placeholder skeleton markup with actual template preview images.
+                    Images are sourced from /template-previews/{id}-resume.png.
+                    Fallback handled via onError → /template-previews/fallback.png.
+                */}
                 <section className="py-24 bg-white">
                     <div className="max-w-5xl mx-auto px-6">
                         <div className="text-center mb-16">
@@ -815,16 +820,18 @@ export default function ResumeBuilder() {
                                     className="group border border-gray-200 rounded-2xl overflow-hidden hover:border-violet-300 hover:shadow-lg hover:shadow-violet-50 transition-all duration-300 cursor-pointer bg-white"
                                     onClick={() => { setSelectedTemplate(id as any); setStep('editor'); }}
                                 >
-                                    <div className="aspect-[4/3] bg-gray-50 p-8 flex items-center justify-center border-b border-gray-100">
-                                        <div className="w-full max-w-[200px] bg-white rounded-lg shadow-sm border border-gray-100 p-4 space-y-2 group-hover:shadow-md transition-shadow">
-                                            <div className="h-2.5 w-1/3 bg-gray-800 rounded mx-auto"></div>
-                                            <div className="h-1.5 w-1/2 bg-gray-200 rounded mx-auto"></div>
-                                            <div className="h-px bg-gray-100 mt-2 mb-2"></div>
-                                            {[1,0.85,0.7,0.9,0.6].map((w,j) => <div key={j} className="h-1 bg-gray-100 rounded" style={{width:`${w*100}%`}} />)}
-                                            <div className="h-px bg-gray-100 mt-1 mb-2"></div>
-                                            {[1,0.8,0.65].map((w,j) => <div key={j} className="h-1 bg-gray-100 rounded" style={{width:`${w*100}%`}} />)}
-                                        </div>
+                                    {/* ── CHANGED: Real template preview image (was: fake skeleton div) ── */}
+                                    <div className="aspect-[4/3] overflow-hidden border-b border-gray-100">
+                                        <img
+                                            src={`/template-previews/${id}-resume.png`}
+                                            alt={`${name} Resume Template`}
+                                            className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                                            onError={(e) => {
+                                                e.currentTarget.src = "/template-previews/fallback.png";
+                                            }}
+                                        />
                                     </div>
+
                                     <div className="p-6">
                                         <div className="flex items-center justify-between mb-1">
                                             <h3 className="font-semibold text-gray-900">{name}</h3>
@@ -877,6 +884,11 @@ export default function ResumeBuilder() {
     }
 
     // ─── TEMPLATE SELECTION ───────────────────────────────────────────────────
+    /*
+        CHANGED: Replaced placeholder skeleton markup with actual template preview images.
+        Images are sourced from /template-previews/{id}-resume.png.
+        Fallback handled via onError → /template-previews/fallback.png.
+    */
     if (step === 'template_selection') {
         return (
             <div className="min-h-screen flex flex-col bg-white">
@@ -911,17 +923,18 @@ export default function ResumeBuilder() {
                                         : 'border-gray-200 hover:border-violet-300 hover:shadow-md hover:shadow-violet-50'
                                 }`}
                             >
-                                {/* Preview */}
-                                <div className="aspect-[4/3] bg-gray-50 p-8 flex items-center justify-center border-b border-gray-100">
-                                    <div className="w-full max-w-[180px] bg-white rounded-lg shadow border border-gray-100 p-4 space-y-2 group-hover:shadow-md transition-shadow">
-                                        <div className="h-2.5 w-1/3 bg-gray-700 rounded mx-auto"></div>
-                                        <div className="h-1.5 w-1/2 bg-gray-200 rounded mx-auto"></div>
-                                        <div className="h-px bg-gray-100 my-2"></div>
-                                        {[1,0.85,0.7,0.9].map((w,j) => <div key={j} className="h-1 bg-gray-100 rounded" style={{width:`${w*100}%`}} />)}
-                                        <div className="h-px bg-gray-100 my-2"></div>
-                                        {[1,0.8].map((w,j) => <div key={j} className="h-1 bg-gray-100 rounded" style={{width:`${w*100}%`}} />)}
-                                    </div>
+                                {/* ── CHANGED: Real template preview image (was: fake skeleton div) ── */}
+                                <div className="aspect-[4/3] overflow-hidden border-b border-gray-100">
+                                    <img
+                                        src={`/template-previews/${id}-resume.png`}
+                                        alt={`${name} Resume Template`}
+                                        className="w-full h-full object-cover object-top transition-transform duration-500 group-hover:scale-105"
+                                        onError={(e) => {
+                                            e.currentTarget.src = "/template-previews/fallback.png";
+                                        }}
+                                    />
                                 </div>
+
                                 {/* Label */}
                                 <div className="p-5 bg-white">
                                     <div className="flex items-center justify-between mb-0.5">
@@ -1075,7 +1088,7 @@ export default function ResumeBuilder() {
         <div className="flex flex-col h-screen overflow-hidden" style={{ background: '#f9fafb' }}>
             <style>{styles}</style>
 
-            {/* ── Editor top bar (kept exactly as original nav logic) ── */}
+            {/* ── Editor top bar ── */}
             <nav className="h-16 bg-white border-b border-slate-100 flex items-center justify-between px-8 shrink-0">
                 <div className="flex items-center gap-6">
                     <div className="flex items-center cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setStep(hasExistingData ? 'dashboard' : 'create_new')}>
