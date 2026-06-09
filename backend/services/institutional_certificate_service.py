@@ -54,7 +54,9 @@ def _event_has_final_terminal_stage(event: dict) -> bool:
     last_stage = stages[-1] or {}
     last_stage_type = str(last_stage.get("type") or "").upper().strip()
     last_stage_name = str(last_stage.get("name") or "").upper().strip()
-    return last_stage_type == "FINAL" or last_stage_name == "FINAL"
+    terminal_types = {"FINAL", "FINALE", "RESULTS", "CERTIFICATION", "AWARDS"}
+    terminal_names = {"FINAL", "FINALE", "RESULTS", "CERTIFICATION", "AWARDS", "WINNERS"}
+    return last_stage_type in terminal_types or any(t in last_stage_name for t in terminal_names)
 
 
 def _build_certificate_record(

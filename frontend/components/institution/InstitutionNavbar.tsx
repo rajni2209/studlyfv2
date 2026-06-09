@@ -185,8 +185,8 @@ const InstitutionNavbar: React.FC<{ refreshKey?: number, onNavigate?: (tab: stri
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
                 
-                const res = await fetch(`${API_BASE_URL}/api/v1/institution/profile/${institutionId}?t=${Date.now()}`, {
-                    headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache', ...authHeaders() },
+                const res = await fetch(`${API_BASE_URL}/api/v1/institution/profile/${institutionId}/branding`, {
+                    headers: { ...authHeaders() },
                     signal: controller.signal
                 });
                 

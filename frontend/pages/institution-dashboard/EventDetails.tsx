@@ -308,8 +308,10 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
     }, [eventId]);
 
     useEffect(() => {
-        fetchTeams();
-    }, [fetchTeams, refreshCounter]);
+        if (activeTab === 'teams' || activeTab === 'registrations') {
+            fetchTeams();
+        }
+    }, [fetchTeams, refreshCounter, activeTab]);
 
     const handleUpdateTeamStatus = async (teamId: string, newStatus: string) => {
         if (!eventId) return;
@@ -440,48 +442,55 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
     const handleIssueCertificates = async () => {
         if (!eventId || !event) return;
 
-        const approvedRows = Array.isArray(bundleData?.approved) ? bundleData.approved : [];
-        const userIds = Array.from(new Set(
-            approvedRows.flatMap((item: any) => {
-                if (Array.isArray(item?.member_user_ids) && item.member_user_ids.length > 0) {
-                    return item.member_user_ids;
-                }
-                if (item?.user_id) {
-                    return [item.user_id];
-                }
-                return [];
-            }).map((value: any) => String(value).trim()).filter(Boolean)
-        ));
+        const templateId = event?.certificate_template_id || event?.template_id || '';
+        const shortlisted = Array.isArray(bundleData?.shortlisted) ? bundleData.shortlisted : [];
+        const approved = Array.isArray(bundleData?.approved) ? bundleData.approved : [];
+        const rankedPool = [...shortlisted, ...approved];
 
-        if (userIds.length === 0) {
-            alert('No approved recipients were resolved for certificate issuance.');
+        if (rankedPool.length === 0) {
+            alert('No shortlisted or approved candidates found for winner/runner-up certificates.');
             return;
         }
 
-        if (!confirm(`Issue certificates to ${userIds.length} approved recipient${userIds.length === 1 ? '' : 's'}?`)) return;
+        if (!confirm(
+            `Issue winner & runner-up certificates to top ranked candidates, then participation certificates to remaining registrants?\n\nTemplate: ${templateId || 'default'}`
+        )) return;
 
         setIssuingCertificates(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/admin/events/${eventId}/certificates/issue`, {
+            const rankedRes = await fetch(`${API_BASE_URL}/api/v1/institution/events/${eventId}/certificates/issue-ranked`, {
                 method: 'POST',
-                headers: {
-                    ...authHeaders(),
-                    'Content-Type': 'application/json',
-                    'X-Admin-Email': user?.email || ''
-                },
+                headers: { ...authHeaders(), 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    user_ids: userIds,
-                    template_id: event?.certificate_template_id || event?.template_id || ''
-                })
+                    template_id: templateId,
+                    top_n: 3,
+                    min_score: bundleData?.thresholds?.shortlist_min || threshold,
+                    send_email: true,
+                }),
             });
-
-            const data = await res.json();
-            if (!res.ok) {
-                throw new Error(data?.detail || data?.error || 'Failed to issue certificates');
+            const rankedData = await rankedRes.json().catch(() => ({}));
+            if (!rankedRes.ok) {
+                throw new Error(rankedData?.detail || rankedData?.error || 'Failed to issue ranked certificates');
             }
 
-            const issuedCount = data?.issued ?? 0;
-            alert(`Issued ${issuedCount} certificate${issuedCount === 1 ? '' : 's'} to ${userIds.length} recipient${userIds.length === 1 ? '' : 's'}.`);
+            const partRes = await fetch(`${API_BASE_URL}/api/v1/events/${eventId}/certificates/generate`, {
+                method: 'POST',
+                headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    template_id: templateId,
+                    achievement_type: 'participation',
+                    send_email: true,
+                    exclude_ranked: true,
+                }),
+            });
+            const partData = await partRes.json().catch(() => ({}));
+            if (!partRes.ok) {
+                throw new Error(partData?.detail || partData?.error || 'Failed to queue participation certificates');
+            }
+
+            const rankedCount = rankedData?.issued ?? rankedData?.count ?? 0;
+            const partQueued = partData?.queued ?? partData?.job_id ? 'queued' : 0;
+            alert(`Ranked certificates issued: ${rankedCount}. Participation batch: ${partQueued || 'started'}. Emails use your selected template.`);
         } catch (error: any) {
             alert(error?.message || 'Failed to issue certificates');
         } finally {
@@ -648,23 +657,22 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
     }, [hasUnsavedChanges, stages, criteria]);
 
     useEffect(() => {
-        if (eventId) {
-            const fetchHackathonSubs = async () => {
-                try {
-                    const res = await fetch(`${API_BASE_URL}/api/hackathons/events/${eventId}/submissions`, {
-                        headers: { ...authHeaders() }
-                    });
-                    if (res.ok) {
-                        const data = await res.json();
-                        setHackathonSubmissions(Array.isArray(data) ? data : []);
-                    }
-                } catch (err) {
-                    // Not all events have hackathon submissions — that's fine
+        if (!eventId || activeTab !== 'submissions') return;
+        const fetchHackathonSubs = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/hackathons/events/${eventId}/submissions`, {
+                    headers: { ...authHeaders() }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    setHackathonSubmissions(Array.isArray(data) ? data : []);
                 }
-            };
-            fetchHackathonSubs();
-        }
-    }, [eventId, refreshCounter]);
+            } catch {
+                // Not all events have hackathon submissions
+            }
+        };
+        fetchHackathonSubs();
+    }, [eventId, refreshCounter, activeTab]);
     const portalRegistrationStatusLabel = (raw: string | undefined) => {
         const s = (raw || 'pending').toLowerCase();
         if (s === 'accepted' || s === 'shortlisted') return 'SHORTLISTED';
@@ -701,21 +709,15 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
                 }
                 const instId = eventData.institution_id;
 
-                // Step 2: Fetch dashboard data and institution profile in parallel
-                const [dashboardData, instData] = await Promise.all([
-                    fetch(`${API_BASE_URL}/api/v1/events/${eventId}/dashboard-data`, { headers: { ...authHeaders() } })
-                        .then(res => {
-                            if (!res.ok) throw new Error(`Dashboard data fetch failed with status ${res.status}`);
-                            return res.json();
-                        })
-                        .catch(err => {
-                            console.error("Critical: Failed to load dashboard data.", err);
-                            return null; // Ensure Promise.all doesn't fail completely
-                        }),
-                    instId 
-                        ? fetch(`${API_BASE_URL}/api/v1/institution/profile/${instId}`, { headers: { ...authHeaders() } }).then(res => res.json()).catch(() => null) 
-                        : Promise.resolve(null)
-                ]);
+                const dashboardData = await fetch(`${API_BASE_URL}/api/v1/events/${eventId}/dashboard-data?limit=500`, { headers: { ...authHeaders() } })
+                    .then(res => {
+                        if (!res.ok) throw new Error(`Dashboard data fetch failed with status ${res.status}`);
+                        return res.json();
+                    })
+                    .catch(err => {
+                        console.error("Critical: Failed to load dashboard data.", err);
+                        return null;
+                    });
 
                 // Step 3: Set state with the fetched data, with proper validation
                 if (dashboardData) {
@@ -733,10 +735,9 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
                         submitted_at: ss.submitted_at || ss.last_updated_at,
                     })) : [];
                     setSubmissions([...legacySubmissions, ...stageSubmissions]);
-                }
-                
-                if (instData) {
-                    setInstitution(instData);
+                    if (Array.isArray(dashboardData.teams) && dashboardData.teams.length > 0) {
+                        setTeams(dashboardData.teams);
+                    }
                 }
 
             } catch (err) {

@@ -79,24 +79,126 @@ def _event_id_query(event_id: str) -> dict:
     return {"$or": or_clauses}
 
 
-async def _list_submissions_for_judge_user(user: dict, event_id: Optional[str] = None) -> list:
-    """Return submitted projects specifically assigned to the authenticated user's email."""
+def _strip_data_uri(value):
+    """Omit base64 data URIs from API payloads — they can be hundreds of KB each."""
+    if isinstance(value, str) and value.startswith("data:"):
+        return None
+    return value
+
+
+def _strip_event_payload_bloat(event: dict) -> dict:
+    """Remove embedded base64 media and oversized editor payloads from event reads."""
+    out = dict(event)
+    for key in ("logo_url", "logo", "banner_url", "banner", "image_url", "image", "logoUrl", "bannerUrl"):
+        if key in out:
+            out[key] = _strip_data_uri(out.get(key)) or out.get(key) if not str(out.get(key) or "").startswith("data:") else ""
+    if isinstance(out.get("stages"), list):
+        cleaned_stages = []
+        for stage in out["stages"]:
+            if not isinstance(stage, dict):
+                continue
+            s = dict(stage)
+            for blob_key in ("logo_url", "banner_url", "image_url"):
+                if blob_key in s:
+                    s[blob_key] = _strip_data_uri(s.get(blob_key))
+            cleaned_stages.append(s)
+        out["stages"] = cleaned_stages
+    return out
+
+
+async def _enrich_judge_assignment_scores(assignments: list, judge_email: str, judge_user_id: str = "") -> list:
+    """Attach existing rubric scores for the current judge to each assignment."""
+    if not assignments:
+        return assignments
+    sub_ids = [str(a.get("_id")) for a in assignments if a.get("_id")]
+    score_query: dict = {"submission_id": {"$in": sub_ids}}
+    if judge_user_id:
+        score_query["$or"] = [{"judge_email": judge_email}, {"judge_id": judge_user_id}]
+    else:
+        score_query["judge_email"] = judge_email
+    score_map: dict[str, dict] = {}
+    async for sc in scores_col.find(score_query):
+        sid = str(sc.get("submission_id") or "")
+        if sid:
+            score_map[sid] = {
+                "scores": sc.get("scores") or sc.get("criteria_scores") or {},
+                "comments": sc.get("feedback") or sc.get("comments") or "",
+                "total_score": sc.get("total_score"),
+            }
+    for item in assignments:
+        item["existing_scores"] = score_map.get(str(item.get("_id")))
+    return assignments
+
+
+async def _list_submissions_for_judge_user(
+    user: dict,
+    event_id: Optional[str] = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> list:
+    """Return stage + legacy submissions assigned to the authenticated judge's email."""
     email = (user.get("email") or "").strip().lower()
+    judge_user_id = str(user.get("user_id") or user.get("id") or "")
     if not email:
         raise HTTPException(status_code=400, detail="Your account must have an email to load judge assignments")
-    q = {"status": "Submitted"}
+
+    review_statuses = [
+        "Submitted", "Under Review", "Scored", "Assigned", "Pending Review",
+        "submitted", "under review", "scored",
+    ]
+    out: list[dict] = []
+    seen: set[str] = set()
+
+    def _judge_assigned(doc: dict) -> bool:
+        emails = doc.get("assigned_judge_emails") or []
+        norm = {str(a).strip().lower() for a in emails if a}
+        if email in norm:
+            return True
+        for aj in doc.get("assigned_judges") or []:
+            if isinstance(aj, dict) and str(aj.get("email") or "").strip().lower() == email:
+                return True
+        return False
+
+    legacy_q: dict = {"status": {"$in": review_statuses}}
     if event_id:
-        q["event_id"] = event_id
-    out = []
-    async for doc in submissions_col.find(q):
-        assigned = doc.get("assigned_judge_emails") or []
-        # CRITICAL: If no judge assigned, or this judge is not assigned, skip.
-        norm = {str(a).strip().lower() for a in assigned if a}
-        if email not in norm:
+        legacy_q["event_id"] = event_id
+    async for doc in submissions_col.find(legacy_q):
+        if not _judge_assigned(doc):
             continue
-        doc["_id"] = str(doc["_id"])
-        out.append(doc)
-    return out
+        sid = str(doc["_id"])
+        if sid in seen:
+            continue
+        seen.add(sid)
+        row = dict(doc)
+        row["_id"] = sid
+        row["source"] = "submissions_col"
+        row["team_name"] = row.get("team_name") or row.get("title") or row.get("project_title") or "Team"
+        out.append(row)
+
+    sd_q: dict = {"status": {"$in": review_statuses}}
+    if event_id:
+        sd_q["event_id"] = event_id
+    async for doc in submission_data_col.find(sd_q):
+        if not _judge_assigned(doc):
+            continue
+        sid = str(doc["_id"])
+        if sid in seen:
+            continue
+        seen.add(sid)
+        row = dict(doc)
+        row["_id"] = sid
+        row["source"] = "stage_deliverable"
+        row["team_name"] = (
+            row.get("team_name") or row.get("user_name")
+            or (row.get("data") or {}).get("team_display_name")
+            or row.get("title") or "Submission"
+        )
+        row["project_title"] = row.get("stage_name") or row.get("title") or ""
+        out.append(row)
+
+    out.sort(key=lambda x: str(x.get("submitted_at") or x.get("created_at") or ""), reverse=True)
+    sliced = out[offset : offset + max(1, min(limit, 100))]
+    return await _enrich_judge_assignment_scores(sliced, email, judge_user_id)
 
 @router.post("/test-email")
 async def test_email_configuration(user: dict = Depends(get_auth_user)):
@@ -331,6 +433,26 @@ async def create_institution_profile(profile: dict, user: dict = Depends(get_aut
             raise HTTPException(status_code=500, detail=f"Failed to save profile: {str(e)}")
     return {"status": "success"}
 
+@router.get("/profile/{institution_id}/branding")
+async def get_institution_branding(institution_id: str, user: dict = Depends(get_auth_user)):
+    """Lightweight institution branding for navbar (name + logo URL only, no base64 blobs)."""
+    assert_institution_scope(institution_id, user)
+    profile = await institutions_col.find_one(
+        {"institution_id": institution_id},
+        {"name": 1, "institution_name": 1, "logo_url": 1, "logo": 1, "image_url": 1},
+    )
+    if not profile:
+        raise HTTPException(status_code=404, detail="Institution not found")
+    logo = _strip_data_uri(
+        profile.get("logo_url") or profile.get("logo") or profile.get("image_url")
+    )
+    return {
+        "institution_id": institution_id,
+        "name": profile.get("name") or profile.get("institution_name") or "Institution",
+        "logo_url": logo,
+    }
+
+
 @router.get("/profile/{institution_id}")
 async def get_institution_profile(institution_id: str, user: dict = Depends(get_auth_user)):
     """Retrieves the full profile of an institution including team and social links."""
@@ -356,13 +478,6 @@ async def fetch_summary(institution_id: str, user: dict = Depends(get_auth_user)
     """Dynamically aggregates real-time metrics for the dashboard."""
     assert_institution_scope(institution_id, user)
     return await analytics_service.get_kpi_summary(institution_id)
-
-def _strip_data_uri(value):
-    """Omit base64 data URIs from list payloads — they can be hundreds of KB each."""
-    if isinstance(value, str) and value.startswith("data:"):
-        return None
-    return value
-
 
 def _event_list_row(doc: dict, participant_count: int = 0) -> dict:
     logo = _strip_data_uri(doc.get("logo_url") or doc.get("logo") or doc.get("image_url") or doc.get("image"))
@@ -397,6 +512,27 @@ async def get_events_summary(
     events_list: list[dict] = []
     event_ids: set[str] = set()
 
+    participant_counts: dict[str, int] = {}
+    async for row in participants_col.aggregate([
+        {"$group": {"_id": "$event_id", "count": {"$sum": 1}}},
+    ]):
+        if row.get("_id") is not None:
+            participant_counts[str(row["_id"])] = int(row.get("count") or 0)
+
+    portal_counts: dict[str, int] = {}
+    async for row in opportunity_applications_col.aggregate([
+        {"$group": {"_id": "$opportunity_id", "count": {"$sum": 1}}},
+    ]):
+        if row.get("_id") is not None:
+            portal_counts[str(row["_id"])] = int(row.get("count") or 0)
+
+    linked_opps: dict[str, str] = {}
+    async for opp in opportunities_col.find(
+        {"event_link_id": {"$exists": True, "$ne": None}},
+        {"_id": 1, "event_link_id": 1},
+    ):
+        linked_opps[str(opp.get("event_link_id"))] = str(opp["_id"])
+
     e_cursor = events_col.find(
         {"institution_id": institution_id, "status": {"$ne": "DELETED"}},
         {
@@ -408,11 +544,9 @@ async def get_events_summary(
     async for event in e_cursor:
         eid = str(event["_id"])
         event_ids.add(eid)
-        booth = await participants_col.count_documents({"event_id": eid})
-        linked = await opportunities_col.find_one({"event_link_id": eid}, {"_id": 1})
-        portal = 0
-        if linked:
-            portal = await opportunity_applications_col.count_documents({"opportunity_id": str(linked["_id"])})
+        booth = participant_counts.get(eid, 0)
+        linked_id = linked_opps.get(eid)
+        portal = portal_counts.get(linked_id, 0) if linked_id else 0
         events_list.append(_event_list_row(event, booth + portal))
 
     o_cursor = opportunities_col.find(
@@ -428,8 +562,7 @@ async def get_events_summary(
         if link and str(link) in event_ids:
             continue
         opp_id = str(opp["_id"])
-        count = await opportunity_applications_col.count_documents({"opportunity_id": opp_id})
-        row = _event_list_row(opp, count)
+        row = _event_list_row(opp, portal_counts.get(opp_id, 0))
         row["category"] = opp.get("type", "Opportunity")
         row["status"] = (opp.get("status") or "Active").upper()
         events_list.append(row)
@@ -702,75 +835,68 @@ async def get_event_participants(event_id: str, user: dict = Depends(get_auth_us
 
 @router.get("/events/{event_id}/teams")
 async def get_event_teams(event_id: str, user: dict = Depends(get_auth_user)):
-    """Retrieves all teams registered for a specific event."""
+    """Retrieves all teams registered for a specific event (batched enrichment)."""
     event_doc = await assert_institution_owns_event(event_id, user)
-    
-    # Robust event_id variants from the actual event document
-    ev_id_variants = [str(event_doc["_id"]), event_doc["_id"]]
+
+    ev_id_variants = list({str(event_doc["_id"]), event_doc["_id"], event_id})
     if event_doc.get("event_id"):
         ev_id_variants.append(event_doc["event_id"])
     if event_doc.get("event_link_id"):
         ev_id_variants.append(event_doc["event_link_id"])
-    
-    # Also include the requested event_id string itself
-    if event_id not in ev_id_variants:
-        ev_id_variants.append(event_id)
 
     from db import teams_col
-    cursor = teams_col.find({"event_id": {"$in": ev_id_variants}})
+    raw_teams = await teams_col.find({"event_id": {"$in": ev_id_variants}}).to_list(length=5000)
+
+    all_member_ids: set[str] = set()
+    for team in raw_teams:
+        for m in team.get("members") or []:
+            uid = str(m.get("user_id") or "")
+            if uid:
+                all_member_ids.add(uid)
+
+    user_map: dict[str, dict] = {}
+    participant_map: dict[str, str] = {}
+    submitted_user_ids: set[str] = set()
+
+    if all_member_ids:
+        member_list = list(all_member_ids)
+        async for u in users_col.find(
+            {"user_id": {"$in": member_list}},
+            {"user_id": 1, "full_name": 1, "name": 1, "email": 1},
+        ):
+            user_map[str(u["user_id"])] = {
+                "name": u.get("full_name") or u.get("name") or "Student",
+                "email": u.get("email"),
+            }
+        async for p in participants_col.find(
+            {"event_id": {"$in": ev_id_variants}, "user_id": {"$in": member_list}},
+            {"user_id": 1, "status": 1},
+        ):
+            participant_map[str(p["user_id"])] = p.get("status", "registered")
+        async for s in submissions_col.find(
+            {"event_id": {"$in": ev_id_variants}, "user_id": {"$in": member_list}},
+            {"user_id": 1},
+        ):
+            submitted_user_ids.add(str(s["user_id"]))
+        async for ss in submission_data_col.find(
+            {"event_id": {"$in": ev_id_variants}, "user_id": {"$in": member_list}},
+            {"user_id": 1},
+        ):
+            submitted_user_ids.add(str(ss["user_id"]))
+
     teams = []
     seen_team_names = set()
-    async for team in cursor:
+    for team in raw_teams:
         team["_id"] = str(team["_id"])
-        
-        # Enrich with member details
-        if "members" in team:
-            member_user_ids = [str(m.get("user_id")) for m in team["members"] if m.get("user_id")]
-            if member_user_ids:
-                from db import users_col, participants_col, submissions_col, submission_data_col
-                
-                # Fetch users
-                users_cursor = users_col.find({"user_id": {"$in": member_user_ids}})
-                user_map = {}
-                async for u in users_cursor:
-                    user_map[str(u["user_id"])] = {
-                        "name": u.get("full_name") or u.get("name") or "Student",
-                        "email": u.get("email")
-                    }
-                
-                # Fetch participants (registration status)
-                participants_cursor = participants_col.find({
-                    "event_id": {"$in": ev_id_variants},
-                    "user_id": {"$in": member_user_ids}
-                })
-                participant_map = {}
-                async for p in participants_cursor:
-                    participant_map[str(p["user_id"])] = p.get("status", "registered")
-
-                # Fetch submissions
-                subs_cursor = submissions_col.find({
-                    "event_id": {"$in": ev_id_variants},
-                    "user_id": {"$in": member_user_ids}
-                })
-                submitted_user_ids = set()
-                async for s in subs_cursor:
-                    submitted_user_ids.add(str(s["user_id"]))
-
-                stage_subs_cursor = submission_data_col.find({
-                    "event_id": {"$in": ev_id_variants},
-                    "user_id": {"$in": member_user_ids}
-                })
-                async for ss in stage_subs_cursor:
-                    submitted_user_ids.add(str(ss["user_id"]))
-                for m in team["members"]:
-                    uid = str(m.get("user_id"))
-                    if uid in user_map:
-                        m["name"] = user_map[uid]["name"]
-                        m["email"] = user_map[uid]["email"]
-                        m["is_leader"] = (str(team.get("team_leader_id") or team.get("leader_id")) == uid)
-                        m["registration_status"] = participant_map.get(uid, "not_registered")
-                        m["submission_status"] = "submitted" if uid in submitted_user_ids else "no_submission"
-                        
+        leader_id = str(team.get("team_leader_id") or team.get("leader_id") or "")
+        for m in team.get("members") or []:
+            uid = str(m.get("user_id") or "")
+            if uid in user_map:
+                m["name"] = user_map[uid]["name"]
+                m["email"] = user_map[uid]["email"]
+                m["is_leader"] = leader_id == uid
+                m["registration_status"] = participant_map.get(uid, "not_registered")
+                m["submission_status"] = "submitted" if uid in submitted_user_ids else "no_submission"
         teams.append(team)
         seen_team_names.add(team.get("team_name") or team.get("name"))
 
@@ -2826,10 +2952,33 @@ async def get_assigned_projects(
 @router.get("/judge/my-assignments")
 async def judge_my_assignments(
     event_id: Optional[str] = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    offset: int = Query(0, ge=0),
     user: dict = Depends(get_auth_user),
 ):
     """Explicit alias for assignment list (authenticated)."""
-    return await _list_submissions_for_judge_user(user, event_id)
+    return await _list_submissions_for_judge_user(user, event_id, limit=limit, offset=offset)
+
+
+@router.get("/judge/criteria/{event_id}")
+async def get_judge_event_criteria(event_id: str, user: dict = Depends(get_auth_user)):
+    """Return rubric criteria for a judge to score assigned submissions."""
+    event = await events_col.find_one(_event_id_query(event_id), {"judging_criteria": 1, "title": 1})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+    criteria = event.get("judging_criteria") or []
+    if not isinstance(criteria, list):
+        criteria = []
+    return [
+        {
+            "id": c.get("id") or c.get("name") or f"criterion_{i}",
+            "name": c.get("name") or c.get("label") or f"Criterion {i + 1}",
+            "max_points": float(c.get("max_points") or c.get("max_score") or 10),
+            "description": c.get("description") or "",
+        }
+        for i, c in enumerate(criteria)
+        if isinstance(c, dict)
+    ]
 
 
 @router.post("/judge/respond-invitation")
@@ -2907,6 +3056,13 @@ async def save_judge_score(score_data: dict, user: dict = Depends(get_auth_user)
         raise HTTPException(status_code=400, detail="submission_id and event_id are required")
 
     sub = await submissions_col.find_one({"_id": ObjectId(str(submission_id))})
+    source_col = submissions_col
+    if not sub:
+        try:
+            sub = await submission_data_col.find_one({"_id": ObjectId(str(submission_id))})
+            source_col = submission_data_col
+        except Exception:
+            sub = None
     if not sub:
         raise HTTPException(status_code=404, detail="Submission not found")
     if not team_id and sub.get("team_id"):
@@ -2915,6 +3071,14 @@ async def save_judge_score(score_data: dict, user: dict = Depends(get_auth_user)
     if assigned:
         norm = {str(a).strip().lower() for a in assigned if a}
         if ue not in norm:
+            raise HTTPException(status_code=403, detail="You are not assigned to review this submission")
+    else:
+        judge_match = any(
+            str(aj.get("email") or "").strip().lower() == ue
+            for aj in (sub.get("assigned_judges") or [])
+            if isinstance(aj, dict)
+        )
+        if not judge_match:
             raise HTTPException(status_code=403, detail="You are not assigned to review this submission")
 
     je = (score_data.get("judge_email") or "").strip().lower()
@@ -2949,9 +3113,14 @@ async def save_judge_score(score_data: dict, user: dict = Depends(get_auth_user)
         upsert=True
     )
 
-    await submissions_col.update_one(
+    await source_col.update_one(
         {"_id": ObjectId(str(submission_id))},
-        {"$set": {"status": "Scored"}},
+        {"$set": {
+            "status": "Scored",
+            "total_score": total_score,
+            "evaluation_score": total_score,
+            "last_evaluated_at": now,
+        }},
     )
 
     event = await events_col.find_one({"_id": ObjectId(str(event_id))})
@@ -3522,7 +3691,7 @@ async def get_complex_event_details(event_id: str, user: dict = Depends(get_auth
     except Exception:
         logger.exception("Failed to backfill event image URLs")
 
-    return event
+    return _strip_event_payload_bloat(event)
 
 def _format_deadline(dl: str) -> str:
     """Convert ISO deadline string to human-readable format (e.g. 'May 28, 2026 11:59 PM')."""

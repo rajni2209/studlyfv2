@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDashboardCache } from '../../contexts/DashboardDataContext';
+import { useInstitutionEvents } from '../../hooks/useInstitutionEvents';
 
 interface Event {
     id: string;
@@ -94,10 +95,47 @@ const FilterDropdown = ({ label, options, value, onChange, onClear }: any) => {
     );
 };
 
+const mapSummaryToEvents = (data: any[]) => data
+    .filter((e: any) => e.category !== 'Job' && e.category !== 'Internship')
+    .map((e: any) => {
+        const rawStatus = (e.status || 'Draft').toLowerCase();
+        let displayStatus = 'Draft';
+        if (rawStatus === 'live' || rawStatus === 'published' || rawStatus === 'active') displayStatus = 'Live';
+        else if (rawStatus === 'completed') displayStatus = 'Completed';
+        else if (rawStatus === 'upcoming') displayStatus = 'Upcoming';
+        const createdAt = e.created_at || e.createdAt;
+        let lastSaved = 'Unknown';
+        if (createdAt) {
+            const diff = Date.now() - new Date(createdAt).getTime();
+            const mins = Math.floor(diff / 60000);
+            const hrs = Math.floor(diff / 3600000);
+            const days = Math.floor(diff / 86400000);
+            if (mins < 60) lastSaved = `${mins}m ago`;
+            else if (hrs < 24) lastSaved = `${hrs}h ago`;
+            else lastSaved = `${days}d ago`;
+        }
+        return {
+            id: e._id,
+            name: e.title,
+            status: displayStatus,
+            type: e.category || 'Event',
+            startDate: e.start_date || '',
+            endDate: e.end_date || '',
+            participants: e.participant_count || 0,
+            registrations: String(e.participant_count || 0),
+            candidate: '',
+            image: e.logo_url || e.image_url || '',
+            visibility: 'Public' as const,
+            registrationStatus: 'Open' as const,
+            lastSaved,
+            category: e.category,
+        };
+    });
+
 const OpportunitiesManagement: React.FC<OpportunitiesManagementProps> = ({ institutionId, onViewEvent, onCreateEvent }) => {
-    const { cache, setCacheData, isLoading, setLoading } = useDashboardCache();
-    const events = cache['institutionOpportunities'] || [];
-    const loading = isLoading['institutionOpportunities'] ?? true;
+    const { setCacheData } = useDashboardCache();
+    const { events: summaryEvents, loading } = useInstitutionEvents(institutionId);
+    const events = React.useMemo(() => mapSummaryToEvents(summaryEvents), [summaryEvents]);
     const [searchQuery, setSearchQuery] = useState('');
     const [typeTab, setTypeTab] = useState('All');
     const [statusFilter, setStatusFilter] = useState('');
@@ -152,81 +190,10 @@ const OpportunitiesManagement: React.FC<OpportunitiesManagementProps> = ({ insti
     };
 
     useEffect(() => {
-        const fetchEvents = async () => {
-            if (!institutionId || cache['institutionOpportunities']) {
-                if (loading) setLoading('institutionOpportunities', false);
-                return;
-            }
-            try {
-                setLoading('institutionOpportunities', true);
-                console.log(`DEBUG: Fetching events for institution: ${institutionId}`);
-                const response = await fetch(`${API_BASE_URL}/api/v1/institution/events/${institutionId}/summary?limit=100`, { headers: { ...authHeaders() } });
-                
-                if (!response.ok) {
-                    throw new Error(`API Error - Status: ${response.status}`);
-                }
-                
-                const body = await response.json();
-                const data = Array.isArray(body?.items) ? body.items : Array.isArray(body) ? body : [];
-                
-                const filteredData = data.filter((e: any) => 
-                    e.category !== 'Job' && e.category !== 'Internship'
-                );
-
-                const mappedEvents = filteredData.map((e: any) => {
-                    const rawStatus = (e.status || 'Draft').toLowerCase();
-                    let displayStatus = 'Draft';
-                    if (rawStatus === 'live' || rawStatus === 'published' || rawStatus === 'active') displayStatus = 'Live';
-                    else if (rawStatus === 'completed') displayStatus = 'Completed';
-                    else if (rawStatus === 'upcoming') displayStatus = 'Upcoming';
-
-                    // Dynamic relative time from created_at
-                    const createdAt = e.created_at || e.createdAt;
-                    let lastSaved = 'Unknown';
-                    if (createdAt) {
-                        const diff = Date.now() - new Date(createdAt).getTime();
-                        const mins = Math.floor(diff / 60000);
-                        const hrs = Math.floor(diff / 3600000);
-                        const days = Math.floor(diff / 86400000);
-                        if (days > 0) lastSaved = `${days} day${days > 1 ? 's' : ''} ago`;
-                        else if (hrs > 0) lastSaved = `${hrs} hour${hrs > 1 ? 's' : ''} ago`;
-                        else if (mins > 0) lastSaved = `${mins} minute${mins > 1 ? 's' : ''} ago`;
-                        else lastSaved = 'Just now';
-                    }
-
-                    const rawCat = (e.category || e.type || '') as string;
-                    const typeLabel = /hackathon/i.test(rawCat) ? 'Hackathons' : rawCat;
-                    const startRaw = e.start_date || e.startDate || e.festivalData?.startDate || e.registrationDeadline;
-                    const endRaw = e.end_date || e.endDate || e.festivalData?.endDate;
-
-                    return {
-                        id: e._id,
-                        name: e.title,
-                        organisation: e.organisation || e.organization || e.organisation_name || '',
-                        status: displayStatus,
-                        type: typeLabel,
-                        startDate: startRaw ? new Date(startRaw).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : 'N/A',
-                        endDate: endRaw ? new Date(endRaw).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }) : 'N/A',
-                        participants: e.participant_count || 0,
-                        registrations: e.participant_count || 0,
-                        candidate: (e.participant_count || 0) > 0 ? `${e.participant_count} registered` : '—',
-                        image: e.image_url || '',
-                        visibility: e.visibility || 'Unknown',
-                        registrationStatus: e.registration_status || 'Unknown',
-                        lastSaved,
-                        category: rawCat
-                    };
-                });
-                
-                setCacheData('institutionOpportunities', mappedEvents);
-            } catch (err) {
-                try { console.error("Dynamic opportunities fetch error:", err instanceof Error ? err.message : String(err)); } catch (_) {}
-            } finally {
-                setLoading('institutionOpportunities', false);
-            }
-        };
-        fetchEvents();
-    }, [institutionId, cache, loading, setCacheData, setLoading]);
+        if (events.length > 0) {
+            setCacheData('institutionOpportunities', events);
+        }
+    }, [events, setCacheData]);
 
     const filteredEvents = events.filter(event => {
         const matchesSearch = event.name.toLowerCase().includes(searchQuery.toLowerCase());
