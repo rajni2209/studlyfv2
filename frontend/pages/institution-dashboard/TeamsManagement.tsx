@@ -271,6 +271,13 @@ const TeamsManagement: React.FC<TeamsManagementProps> = ({ institutionId }) => {
                                                         Reject
                                                     </button>
                                                     <button
+                                                        onClick={() => handleNotifyTeam(team._id)}
+                                                        className="p-2 text-slate-400 hover:text-purple-600 hover:bg-purple-50 rounded-xl transition-all"
+                                                        title="Notify Team"
+                                                    >
+                                                        <Users size={18} />
+                                                    </button>
+                                                    <button
                                                         onClick={() => handleDeleteTeam(team._id)}
                                                         disabled={deleting === team._id}
                                                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
