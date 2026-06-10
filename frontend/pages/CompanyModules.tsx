@@ -584,17 +584,21 @@ const CompanyModules: React.FC = () => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'X-Groq-Api-Key': groqApiKey
+          'X-Groq-Api-Key': groqApiKey.trim()
         },
         body: JSON.stringify({ company_name: selectedCompany.name })
       });
-      if (!res.ok) throw new Error('Failed to start simulator');
+      
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Failed to start simulator');
+      }
+      
       setSimSessionId(data.session_id);
       setChatMessages([{ sender: 'ai', text: data.response }]);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      triggerToast('Failed to start simulator.');
+      triggerToast(`Error: ${err.message}`);
       setSimActive(false);
     } finally {
       setIsSimLoading(false);
@@ -616,7 +620,7 @@ const CompanyModules: React.FC = () => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'X-Groq-Api-Key': groqApiKey
+          'X-Groq-Api-Key': groqApiKey.trim()
         },
         body: JSON.stringify({
           company_name: selectedCompany.name,
@@ -624,12 +628,16 @@ const CompanyModules: React.FC = () => {
           chat_history: history
         })
       });
-      if (!res.ok) throw new Error('Failed to get response');
+      
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Failed to get response');
+      }
+      
       setChatMessages(prev => [...prev, { sender: 'ai', text: data.response }]);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      triggerToast('Chat request failed.');
+      triggerToast(`Error: ${err.message}`);
     } finally {
       setSimSpeaking(false);
     }
@@ -648,21 +656,25 @@ const CompanyModules: React.FC = () => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'X-Groq-Api-Key': groqApiKey
+          'X-Groq-Api-Key': groqApiKey.trim()
         },
         body: JSON.stringify({
           company_name: selectedCompany.name,
           chat_history: history
         })
       });
-      if (!res.ok) throw new Error('Failed to fetch feedback');
+      
       const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || 'Failed to generate feedback');
+      }
+      
       setSimFeedback(data.feedback);
       triggerToast('Placement readiness report generated.');
       setStreaks(prev => prev + 1);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      triggerToast('Failed to generate feedback.');
+      triggerToast(`Error generating feedback: ${err.message}`);
     } finally {
       setSimSpeaking(false);
     }
