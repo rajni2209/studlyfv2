@@ -136,7 +136,7 @@ const OpportunitiesList: React.FC = () => {
                     setAppliedIds([]);
                 }
             } catch (err) {
-                try { console.error("Fetch error:", err instanceof Error ? err.message : String(err)); } catch (_) {}
+                try { console.error("Fetch error:", err instanceof Error ? err.message : String(err)); } catch (_) { }
             } finally {
                 setLoading(false);
             }
@@ -252,7 +252,7 @@ const OpportunitiesList: React.FC = () => {
                         <div className="col-span-1 lg:col-span-7 space-y-8">
                             <div>
                                 <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-purple-50 text-purple-600 font-black text-[10px] uppercase tracking-[0.2em] border border-purple-100 mb-6 shadow-sm">
-                                    <Sparkles size={12} className="text-purple-500" /> Discovery Engine
+                                    Discovery Engine
                                 </div>
                                 <h1 className="text-5xl lg:text-7xl font-black text-slate-900 tracking-tight leading-[1.05]">
                                     Find Opportunities. <br className="hidden sm:block" />
