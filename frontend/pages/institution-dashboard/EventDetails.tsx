@@ -157,6 +157,11 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
     useEffect(() => {
         if (initialSection) setActiveTab(initialSection);
     }, [initialSection, eventId]);
+
+    useEffect(() => {
+        setSelectedBundleItems([]);
+        setSelectedBundleForEmail([]);
+    }, [bundleTab]);
     const [showSaveSuccess, setShowSaveSuccess] = useState(false);
     const [quizzes, setQuizzes] = useState<any[]>([]);
     const [isQuizModalOpen, setIsQuizModalOpen] = useState(false);
@@ -164,6 +169,7 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
     const [previewRecommendation, setPreviewRecommendation] = useState<{ title: string; text: string } | null>(null);
     const [isCreatingQuiz, setIsCreatingQuiz] = useState(false);
     const [quizStageId, setQuizStageId] = useState<string | null>(null);
+    const [notifyFilter, setNotifyFilter] = useState<string>('all');
     const [reviewQuiz, setReviewQuiz] = useState<{ quizId: string; quizTitle: string; stageName: string } | null>(null);
     const [codingAttempts, setCodingAttempts] = useState<Record<string, any[]>>({});
     const [editDescription, setEditDescription] = useState(false);
@@ -595,6 +601,8 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
     const [evaluatingSubmission, setEvaluatingSubmission] = useState<any>(null);
     const [evaluationScores, setEvaluationScores] = useState<Record<string, number>>({});
     const [evaluationComment, setEvaluationComment] = useState('');
+    const [selectedBundleItems, setSelectedBundleItems] = useState<string[]>([]);
+    const [selectedBundleForEmail, setSelectedBundleForEmail] = useState<any[]>([]);
 
     // Track unsaved changes to lifecycle or criteria
     const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -1235,8 +1243,8 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
     };
 
     const confirmBulkDispatch = async () => {
-        const currentBundle = bundleData?.[bundleTab] || [];
-        const teamIds = currentBundle.map((item: any) => item.team_id);
+        const selectedForEmail = selectedBundleForEmail.length > 0 ? selectedBundleForEmail : (bundleData?.[bundleTab] || []);
+        const teamIds = selectedForEmail.map((item: any) => item.team_id || item.submission_id);
 
         setNotifying(true);
         try {
@@ -1477,9 +1485,8 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
             } catch (err) {
                 try { console.error('Failed to update stage submission status:', err instanceof Error ? err.message : String(err)); } catch (_) { }
             }
-        } else if (item?.team_id || teamId) {
-            const resolvedTeamId = item?.team_id || teamId;
-            // Update team status in participants collection
+        } else if (item?.team_id) {
+            const resolvedTeamId = item.team_id;
             try {
                 const res = await fetch(`${API_BASE_URL}/api/v1/institution/events/${eventId}/teams/${resolvedTeamId}/status`, {
                     method: 'PATCH',
@@ -1489,14 +1496,13 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
                 if (res.ok) {
                     setBundleData(prev => ({
                         ...prev,
-                        [bundleTab]: prev?.[bundleTab]?.map((item: any) =>
-                            item.team_id === resolvedTeamId ? { ...item, status: newStatus } : item
+                        [bundleTab]: prev?.[bundleTab]?.map((i: any) =>
+                            i.team_id === resolvedTeamId ? { ...i, status: newStatus } : i
                         )
                     }));
                     setShowSaveSuccess(true);
                     setTimeout(() => setShowSaveSuccess(false), 2000);
 
-                    // Send email notification with stage context
                     if (item) {
                         try {
                             const stageInfo = getCurrentStageInfo();
@@ -1515,6 +1521,8 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
                             try { console.error('Failed to send email:', emailErr instanceof Error ? emailErr.message : String(emailErr)); } catch (_) { }
                         }
                     }
+                } else {
+                    try { console.error('Failed to update team status:', await res.text()); } catch (_) {}
                 }
             } catch (err) {
                 try { console.error('Failed to update team status:', err instanceof Error ? err.message : String(err)); } catch (_) { }
@@ -2679,11 +2687,50 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
                         )}
                     </div>
 
+                    <div className="flex flex-wrap items-center gap-4 px-6">
+                        <div className="relative">
+                            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <input
+                                type="text"
+                                placeholder="Search teams..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-14 pr-8 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-sm font-bold text-slate-900 outline-none focus:bg-white focus:ring-4 focus:ring-purple-50 transition-all w-72"
+                            />
+                        </div>
+                        <select
+                            value={notifyFilter}
+                            onChange={(e) => setNotifyFilter(e.target.value)}
+                            className="px-5 py-3 bg-slate-50 border border-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 outline-none focus:ring-4 focus:ring-purple-50 transition-all"
+                        >
+                            <option value="all">All</option>
+                            <option value="notified">Notified</option>
+                            <option value="unnotified">Unnotified</option>
+                        </select>
+                    </div>
+
                     <div className="bg-white rounded-[3rem] border border-slate-100 overflow-hidden shadow-2xl shadow-slate-200/20">
-                        <table className="w-full text-left">
+                        <table className="w-full text-left" style={{ tableLayout: 'fixed' }}>
                             <thead>
                                 <tr className="bg-slate-50/50">
-                                    <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Candidate Identity</th>
+                                    {bundleTab === 'shortlisted' && (
+                                        <th className="px-6 py-6 w-14">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedBundleItems.length > 0 && selectedBundleItems.length === (filteredBundleItems || []).length}
+                                                onChange={() => {
+                                                    const items = filteredBundleItems || [];
+                                                    if (selectedBundleItems.length === items.length) {
+                                                        setSelectedBundleItems([]);
+                                                    } else {
+                                                        setSelectedBundleItems(items.map((i: any) => i.team_id || i.submission_id));
+                                                    }
+                                                }}
+                                                className="w-5 h-5 rounded border-2 border-slate-200 text-purple-600 focus:ring-purple-500"
+                                            />
+                                        </th>
+                                    )}
+                                    <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Team Name</th>
                                     <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Judge Status</th>
                                     <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Score Aggregate</th>
                                     <th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Recommendation</th>
@@ -2691,46 +2738,91 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-50">
-                                {(bundleData?.[bundleTab] || []).length > 0 ? (
-                                    (bundleData[bundleTab] || []).map((item: any, idx: number) => (
+                                {(() => {
+                                    const rawItems = bundleData?.[bundleTab] || [];
+                                    const filteredBundleItems = rawItems.filter((item: any) => {
+                                        if (notifyFilter === 'notified') return !!item.notified_at;
+                                        if (notifyFilter === 'unnotified') return !item.notified_at;
+                                        return true;
+                                    });
+                                    const searchedItems = searchQuery.trim()
+                                        ? filteredBundleItems.filter((item: any) =>
+                                            (item.team_name || '').toLowerCase().includes(searchQuery.toLowerCase())
+                                        )
+                                        : filteredBundleItems;
+                                    return { filteredBundleItems: searchedItems, rawItems };
+                                })().filteredBundleItems.length > 0 ? (
+                                    (() => {
+                                        const rawItems = bundleData?.[bundleTab] || [];
+                                        const filtered = rawItems.filter((item: any) => {
+                                            if (notifyFilter === 'notified') return !!item.notified_at;
+                                            if (notifyFilter === 'unnotified') return !item.notified_at;
+                                            return true;
+                                        });
+                                        const searched = searchQuery.trim()
+                                            ? filtered.filter((item: any) =>
+                                                (item.team_name || '').toLowerCase().includes(searchQuery.toLowerCase())
+                                            )
+                                            : filtered;
+                                        return searched.map((item: any, idx: number) => (
                                         <motion.tr
-                                            key={item.team_id || item.user_id || idx}
+                                            key={item.team_id || item.user_id || item.submission_id || idx}
                                             initial={{ opacity: 0, y: 10 }}
                                             animate={{ opacity: 1, y: 0 }}
                                             transition={{ delay: idx * 0.03 }}
                                             className="hover:bg-slate-50/30 transition-colors group"
                                         >
+                                            {bundleTab === 'shortlisted' && (
+                                                <td className="px-6 py-8">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedBundleItems.includes(item.team_id || item.submission_id)}
+                                                        onChange={() => {
+                                                            const id = item.team_id || item.submission_id;
+                                                            setSelectedBundleItems(prev =>
+                                                                prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+                                                            );
+                                                        }}
+                                                        className="w-5 h-5 rounded border-2 border-slate-200 text-purple-600 focus:ring-purple-500"
+                                                    />
+                                                </td>
+                                            )}
                                             <td className="px-10 py-8">
-                                                <div className="flex flex-col">
-                                                    <span className="font-black text-slate-900 text-lg tracking-tight group-hover:text-[#6C3BFF] transition-colors">
-                                                        {item.team_name}
-                                                    </span>
-                                                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                                                        <span className="px-2.5 py-1 rounded-full border border-slate-200 bg-slate-50 text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
-                                                            {getBundleSourceLabel(item)}
-                                                        </span>
-                                                        <span className="px-2.5 py-1 rounded-full border border-purple-100 bg-purple-50 text-[9px] font-black uppercase tracking-[0.2em] text-purple-600">
-                                                            {getBundleStatusLabel(item.status || 'Pending')}
-                                                        </span>
-                                                    </div>
-                                                </div>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleOpenSubmissionTeam(item)}
+                                                    className="font-black text-slate-900 text-lg tracking-tight text-left hover:text-[#6C3BFF] transition-colors"
+                                                >
+                                                    {item.team_name}
+                                                </button>
+                                                {item.notified_at && (
+                                                    <span className="ml-2 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 text-[8px] font-black uppercase tracking-wider">Notified</span>
+                                                )}
                                             </td>
                                             <td className="px-10 py-8">
-                                                <div className="flex flex-col gap-2">
-                                                    {item.total_judges > 0 || item.score > 0 ? (
-                                                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-[10px] font-black uppercase tracking-wider w-fit ${item.judges_completed >= item.total_judges ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-purple-50 text-purple-600 border-purple-100'}`}>
-                                                            <CheckCircle2 size={12} />
-                                                            {item.judges_completed}/{item.total_judges} Judges Verified
+                                                <div className="flex flex-col gap-1.5">
+                                                    {Array.isArray(item.judges) && item.judges.length > 0 ? item.judges.map((j: any, ji: number) => (
+                                                        <div key={ji} className="relative group/judge">
+                                                            <div className="flex items-center gap-2 cursor-pointer" title={j.email || ''}>
+                                                                <span className={`w-2 h-2 rounded-full ${j.verified ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                                                                <span className="text-[11px] font-bold text-slate-700 group-hover/judge:text-[#6C3BFF] transition-colors">
+                                                                    {j.name || 'Judge'}
+                                                                </span>
+                                                                {j.verified ? (
+                                                                    <span className="text-[9px] font-black text-emerald-600 uppercase tracking-wider">Verified</span>
+                                                                ) : (
+                                                                    <span className="text-[9px] font-black text-amber-600 uppercase tracking-wider">Pending</span>
+                                                                )}
+                                                            </div>
+                                                            {j.email && (
+                                                                <div className="absolute left-0 top-full mt-1 px-2 py-1 bg-slate-800 text-white text-[10px] rounded-lg opacity-0 group-hover/judge:opacity-100 transition-opacity whitespace-nowrap z-10 pointer-events-none">
+                                                                    {j.email}
+                                                                </div>
+                                                            )}
                                                         </div>
-                                                    ) : null}
-                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.18em]">
-                                                        {getBundleActionHint(item)}
-                                                    </p>
-                                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.18em]">
-                                                        {Array.isArray(item.member_emails) && item.member_emails.length > 0
-                                                            ? `Mail will go to ${item.member_emails.length} recipient${item.member_emails.length === 1 ? '' : 's'}`
-                                                            : 'No recipients resolved yet'}
-                                                    </p>
+                                                    )) : (
+                                                        <span className="text-[10px] font-bold text-slate-300 italic">No judges assigned</span>
+                                                    )}
                                                 </div>
                                             </td>
                                             <td className="px-10 py-8 text-center">
@@ -2747,52 +2839,56 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
                                                     >
                                                         {item.recommendation}
                                                     </button>
-                                                ) : (
-                                                    <span className="text-[10px] font-bold text-slate-300 italic">No feedback</span>
-                                                )}
+                                                ) : null}
                                             </td>
-                                            <td className="px-10 py-8 text-right">
-                                                <div className="flex gap-2 justify-end">
+                                            <td className="px-10 py-8 text-right whitespace-nowrap">
+                                                <div className="flex gap-1.5 justify-end">
                                                     {(() => {
                                                         const status = (item.status || '').toLowerCase();
                                                         if (status === 'approved' || status === 'accepted') {
-                                                            return <div className="px-4 py-2 text-emerald-600 text-[10px] font-black uppercase tracking-widest bg-emerald-50 rounded-xl border border-emerald-100">Approved</div>;
+                                                            return <div className="px-3 py-2 text-emerald-600 text-[10px] font-black uppercase tracking-widest bg-emerald-50 rounded-xl border border-emerald-100">Approved</div>;
                                                         }
                                                         if (status === 'waitlisted') {
-                                                            return <div className="px-4 py-2 text-amber-600 text-[10px] font-black uppercase tracking-widest bg-amber-50 rounded-xl border border-amber-100">Waitlisted</div>;
+                                                            return <div className="px-3 py-2 text-amber-600 text-[10px] font-black uppercase tracking-widest bg-amber-50 rounded-xl border border-amber-100">Waitlisted</div>;
                                                         }
                                                         if (status === 'rejected') {
-                                                            return <div className="px-4 py-2 text-rose-600 text-[10px] font-black uppercase tracking-widest bg-rose-50 rounded-xl border border-rose-100">Rejected</div>;
+                                                            return <div className="px-3 py-2 text-rose-600 text-[10px] font-black uppercase tracking-widest bg-rose-50 rounded-xl border border-rose-100">Rejected</div>;
                                                         }
                                                         return (
                                                             <>
-                                                                {status !== 'shortlisted' ? (
-                                                                    <button
-                                                                        onClick={() => handleUpdateStatus(item.team_id || item.submission_id, 'Shortlisted', item)}
-                                                                        className="p-3 text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm text-xs font-bold"
-                                                                        title={Array.isArray(item.member_emails) && item.member_emails.length > 0 ? `Shortlist and mail ${item.member_emails.length} recipient${item.member_emails.length === 1 ? '' : 's'}` : 'Shortlist for the next review round'}
-                                                                    >
-                                                                        Shortlist
-                                                                    </button>
-                                                                ) : null}
                                                                 <button
-                                                                    onClick={() => handleUpdateStatus(item.team_id || item.submission_id, 'Waitlisted', item)}
-                                                                    className="p-3 text-amber-600 bg-amber-50 hover:bg-amber-600 hover:text-white rounded-xl transition-all shadow-sm text-xs font-bold"
-                                                                    title="Place on waitlist"
+                                                                    onClick={() => {
+                                                                        handleUpdateStatus(item.team_id || item.submission_id, 'Shortlisted', item);
+                                                                        setBundleTab('shortlisted');
+                                                                    }}
+                                                                    className="px-2.5 py-2 text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-xl transition-all shadow-sm text-[10px] font-bold whitespace-nowrap"
+                                                                >
+                                                                    Shortlist
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        handleUpdateStatus(item.team_id || item.submission_id, 'Waitlisted', item);
+                                                                        setBundleTab('waitlisted');
+                                                                    }}
+                                                                    className="px-2.5 py-2 text-amber-600 bg-amber-50 hover:bg-amber-600 hover:text-white rounded-xl transition-all shadow-sm text-[10px] font-bold whitespace-nowrap"
                                                                 >
                                                                     Waitlist
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => handleUpdateStatus(item.team_id || item.submission_id, 'Accepted', item)}
-                                                                    className="p-3 text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-sm text-xs font-bold"
-                                                                    title={Array.isArray(item.member_emails) && item.member_emails.length > 0 ? `Approve and notify ${item.member_emails.length} recipient${item.member_emails.length === 1 ? '' : 's'}` : 'Accept / approve this entry'}
+                                                                    onClick={() => {
+                                                                        handleUpdateStatus(item.team_id || item.submission_id, 'Accepted', item);
+                                                                        setBundleTab('approved');
+                                                                    }}
+                                                                    className="px-2.5 py-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-xl transition-all shadow-sm text-[10px] font-bold whitespace-nowrap"
                                                                 >
                                                                     Approve
                                                                 </button>
                                                                 <button
-                                                                    onClick={() => handleUpdateStatus(item.team_id || item.submission_id, 'Rejected', item)}
-                                                                    className="p-3 text-rose-600 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-xl transition-all shadow-sm text-xs font-bold"
-                                                                    title="Reject / remove from consideration"
+                                                                    onClick={() => {
+                                                                        handleUpdateStatus(item.team_id || item.submission_id, 'Rejected', item);
+                                                                        setBundleTab('rejected');
+                                                                    }}
+                                                                    className="px-2.5 py-2 text-rose-600 bg-rose-50 hover:bg-rose-600 hover:text-white rounded-xl transition-all shadow-sm text-[10px] font-bold whitespace-nowrap"
                                                                 >
                                                                     Reject
                                                                 </button>
@@ -2802,10 +2898,11 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
                                                 </div>
                                             </td>
                                         </motion.tr>
-                                    ))
+                                        ));
+                                    })()
                                 ) : (
                                     <tr>
-                                        <td colSpan={4} className="px-10 py-24 text-center">
+                                        <td colSpan={bundleTab === 'shortlisted' ? 6 : 5} className="px-10 py-24 text-center">
                                             <div className="flex flex-col items-center opacity-20">
                                                 <Filter size={64} className="mb-6" />
                                                 <p className="text-slate-400 font-black text-sm uppercase tracking-widest">No {BUNDLE_TAB_LABEL[bundleTab]?.toLowerCase() || ''} candidates</p>
@@ -2816,6 +2913,38 @@ const EventDetails: React.FC<EventDetailsProps> = ({ eventId, onBack, institutio
                             </tbody>
                         </table>
                     </div>
+                    {bundleTab === 'shortlisted' && selectedBundleItems.length > 0 && (
+                        <div className="flex items-center justify-between px-4 py-4 bg-purple-50 border border-purple-100 rounded-2xl mt-4">
+                            <span className="text-xs font-bold text-purple-700">{selectedBundleItems.length} team(s) selected</span>
+                            <button
+                                onClick={() => {
+                                    const currentBundle = bundleData?.[bundleTab] || [];
+                                    const selectedItems = currentBundle.filter((i: any) => selectedBundleItems.includes(i.team_id || i.submission_id));
+                                    const stageInfo = getCurrentStageInfo();
+                                    const nextStageName = stageInfo.next_stage_name;
+                                    if (!nextStageName) {
+                                        alert('No next stage available for this event. Define stages first.');
+                                        return;
+                                    }
+                                    setBulkNotifyNextStage(nextStageName);
+                                    setBulkNotifySubject(`Congratulations! You've been shortlisted for ${event?.title || ''}`);
+                                    setBulkNotifyMessage(DEFAULT_SHORTLIST_MESSAGE.replace(/{next_stage}/g, nextStageName));
+                                    setBulkNotifySelectedTemplate('default');
+                                    setBulkNotifyMinScore('');
+                                    setSelectedBundleForEmail(selectedItems);
+                                    fetch(`${API_BASE_URL}/api/v1/institution/events/${eventId}/email-templates`, {
+                                        headers: { ...authHeaders() }
+                                    }).then(r => r.ok && r.json()).then(d => {
+                                        if (d) setBulkNotifyTemplates(d.filter((t: any) => ['stage_advancement', 'announcement'].includes(t.type)));
+                                    }).catch(() => {});
+                                    setIsBulkNotifyModalOpen(true);
+                                }}
+                                className="px-6 py-3 bg-purple-600 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-purple-700 transition-all shadow-lg shadow-purple-900/20"
+                            >
+                                Send Email to Selected
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
         );

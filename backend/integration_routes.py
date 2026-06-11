@@ -1492,10 +1492,17 @@ async def get_qualified_bundle(
         item["member_user_ids"] = _collect_member_user_ids(s.get("team_id"), s.get("user_id") or s.get("submittedBy"))
         if s.get("assigned_judges"):
             item["assigned_judges"] = s.get("assigned_judges") or []
+        team_id_val = s.get("team_id")
+        if team_id_val:
+            item["team_id"] = str(team_id_val)
+        user_id_val = s.get("user_id")
+        if user_id_val:
+            item["user_id"] = str(user_id_val)
 
     score_judges_by_submission: dict[str, set[str]] = {}
     scores_by_submission: dict[str, list[float]] = {}
     feedback_by_submission: dict[str, list[str]] = {}
+    judge_details_by_submission: dict[str, list[dict]] = {}
     for sc in raw_scores:
         sc_sid = sc.get("submission_id")
         if not sc_sid:
@@ -1508,6 +1515,18 @@ async def get_qualified_bundle(
         if judge_key:
             score_judges_by_submission.setdefault(sid, set()).add(judge_key)
             
+        # Collect judge detail info
+        judge_entry = {
+            "email": judge_key or "",
+            "judge_id": str(sc.get("judge_id") or sc.get("judge") or ""),
+            "verified": sc.get("verified", False) if isinstance(sc.get("verified"), bool) else True,
+            "score": score_val,
+        }
+        judge_name = sc.get("judge_name") or sc.get("name") or ""
+        if judge_name:
+            judge_entry["name"] = str(judge_name)
+        judge_details_by_submission.setdefault(sid, []).append(judge_entry)
+            
         feedback = sc.get("feedback") or sc.get("comments") or sc.get("comment") or sc.get("remarks")
         if feedback and isinstance(feedback, str):
             feedback_by_submission.setdefault(sid, []).append(feedback)
@@ -1519,6 +1538,9 @@ async def get_qualified_bundle(
         feedbacks = feedback_by_submission.get(sid, [])
         if feedbacks and sid in all_items:
             all_items[sid]["recommendation"] = " | ".join(feedbacks)
+        judge_details = judge_details_by_submission.get(sid, [])
+        if judge_details and sid in all_items:
+            all_items[sid]["judges"] = judge_details
 
     scores_by_team: dict[str, list[float]] = {}
     for sc in raw_scores:
@@ -1551,6 +1573,12 @@ async def get_qualified_bundle(
 
         if sd.get("assigned_judges"):
             item["assigned_judges"] = sd.get("assigned_judges") or []
+        sd_team_id = sd.get("team_id")
+        if sd_team_id:
+            item["team_id"] = str(sd_team_id)
+        sd_user_id = sd.get("user_id")
+        if sd_user_id:
+            item["user_id"] = str(sd_user_id)
             
         sd_feedback = sd.get("feedback") or sd.get("comments") or sd.get("comment") or sd.get("recommendation")
         if sd_feedback and isinstance(sd_feedback, str) and not item.get("recommendation"):
