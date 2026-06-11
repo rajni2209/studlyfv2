@@ -2,48 +2,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform, useScroll } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import {
-    ArrowRight,
-    ChevronLeft,
-    ChevronDown,
-    Sparkles,
-    CheckCircle2,
-    Brain,
-    Target,
-    Rocket,
-    Search,
-    RefreshCw,
-    Plus,
-    MessageSquare,
-    FileText,
-    Lightbulb,
-    Briefcase,
-    GraduationCap,
-    Dumbbell,
-    Heart,
-    X,
-    History,
-    Copy,
-    TrendingUp,
-    Award,
-    BookOpen,
-    MapPin,
-    Cpu,
-    BarChart4,
-    Zap,
-    LayoutDashboard,
-    Settings2,
-    Share2,
-    Edit3,
-    Network,
-    Flag,
-    Loader2,
-    Info,
-    PlayCircle,
-    Code,
-    Terminal,
-    ChevronRight
-} from 'lucide-react';
+
 
 import { API_BASE_URL as API_BASE } from '../apiConfig';
 
@@ -73,27 +32,59 @@ const FALLBACK_ROADMAP = [
     { "month": 6, "title": "Job Search", "tasks": ["Send applications", "Practice talking"], "project": "Career Start", "stack": ["LinkedIn", "GitHub"], "concepts": ["Interview Prep", "Networking"], "extras": "Mock Interviews" }
 ];
 
+const getActionRecommendation = (skillKey: string, displayName: string, gapDepth: number) => {
+    const recommendations: Record<string, string> = {
+        coding: "Focus on writing clean code, solving data structures, and practicing algorithm problems.",
+        problem_solving: "Participate in competitive programming or hackathons to solve complex logical problems.",
+        systems_thinking: "Study system architecture patterns, design principles, and how web applications scale.",
+        debugging: "Practice using devtools, reading stack traces, and writing diagnostic test suites.",
+        algorithmic_thinking: "Practice algorithms, dynamic programming, and data structures using online judges.",
+        software_engineering: "Learn software lifecycles, agile workflows, and design patterns like MVC and SOLID.",
+        database: "Build a database schema, learn normal forms, and design relations using SQL or NoSQL.",
+        communication: "Present your project designs, write technical documentation, and collaborate on team code reviews.",
+        teamwork: "Contribute to open source projects or participate in hackathons to work in agile teams.",
+        frontend_development: "Build interactive user interfaces with modern React, styling, and state management.",
+        backend_development: "Create secure REST/GraphQL API systems using Node.js, Python/Django, or Go.",
+        machine_learning: "Implement supervised and unsupervised models with Scikit-learn, PyTorch, or TensorFlow.",
+        deep_learning: "Build and train neural networks (CNNs, RNNs, transformers) for vision or NLP.",
+        data_analysis: "Clean and analyze real-world datasets using pandas, numpy, and Jupyter notebooks.",
+        statistics: "Study probability, hypothesis testing, and regression analysis for statistical significance.",
+        visualization: "Create interactive dashboards and reports using Tableau, Power BI, or Chart.js.",
+        ui_design: "Create high-fidelity interactive mockups and wireframes using Figma or Adobe XD.",
+        ux_design: "Conduct user research interviews, create personas, and map user journey flows.",
+        cloud_computing: "Learn to deploy resources on AWS, GCP, or Azure and study serverless architectures.",
+        devops: "Set up CI/CD pipelines, Docker containerization, and basic server deployments.",
+        cybersecurity: "Study networking security, authentication protocols, OWASP top 10, and penetration testing.",
+        robotics: "Work on microcontroller programming, sensor integration, and basic control loop systems.",
+        embedded_systems: "Write low-level firmware in C/C++ for microcontrollers and RTOS environments.",
+        project_management: "Learn agile project planning, scope definition, and stakeholder milestone tracking.",
+        product_thinking: "Define user stories, product requirements (PRDs), and design feature launch strategies."
+    };
+
+    return recommendations[skillKey] || `Focus on Phase 1 & 2 roadmap tasks to build your ${displayName} proficiency.`;
+};
+
 // --- NETWORK VISUALIZATION COMPONENTS ---
 
 interface Position {
-  cx: number;
-  cy: number;
+    cx: number;
+    cy: number;
 }
 
 interface Connection {
-  from: number | 'center';
-  to: number | 'center';
-  color: string;
+    from: number | 'center';
+    to: number | 'center';
+    color: string;
 }
 
 interface PathPositions {
-  [key: string]: Position;
+    [key: string]: Position;
 }
 
 const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isGenerating: boolean; formData: any }> = ({ paths, onPathClick, isGenerating, formData }) => {
     const [containerSize, setContainerSize] = useState({ width: 1000, height: 1000 });
     const [hoveredPathId, setHoveredPathId] = useState<number | string | null>(null);
-    
+
     const dimensions = useMemo(() => {
         const width = window.innerWidth;
         const baseSize = Math.min(width - 32, 1200);
@@ -132,16 +123,16 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
         const total = ringPaths.length;
         ringPaths.forEach((p, i) => {
             const angle = (i / total) * 2 * Math.PI - Math.PI / 2;
-            
+
             // Pronounced staggered radius to ensure zero horizontal overlap
             const currentCardRadius = i % 2 === 0 ? dimensions.cardRadius : dimensions.cardRadius + (90 * (dimensions.containerSize / 1000));
-            
+
             // Anchor point on the outer dashed ring
             pos[`anchor_${p.id}`] = {
                 cx: dimensions.centerX + dimensions.outerRadius * Math.cos(angle),
                 cy: dimensions.centerY + dimensions.outerRadius * Math.sin(angle)
             };
-            
+
             // Card center position on the staggered circle
             pos[`card_${p.id}`] = {
                 cx: dimensions.centerX + currentCardRadius * Math.cos(angle),
@@ -155,10 +146,10 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
         <div className="w-full relative flex items-center justify-center overflow-hidden bg-white" style={{ height: dimensions.containerSize }}>
             {/* Background Grid */}
             <div className="absolute inset-0 opacity-[0.2]" style={{ backgroundImage: 'radial-gradient(#d1d5db 1px, transparent 0)', backgroundSize: '32px 32px' }} />
-            
+
             {isGenerating && (
-                <div className="absolute top-10 z-[100] flex items-center gap-2 px-5 py-2 bg-white/90 backdrop-blur-md rounded-full shadow-lg border border-blue-100 text-blue-600 font-black text-[10px] uppercase tracking-widest">
-                    <Loader2 className="w-4 h-4 animate-spin" />
+                <div className="absolute top-10 z-[100] flex items-center gap-2 px-5 py-2 bg-white/90 backdrop-blur-md rounded-full shadow-lg border border-purple-100 text-[#7C3AED] font-black text-[10px] uppercase tracking-widest">
+                    <div className="w-4 h-4 border-2 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
                     <span>Synchronizing Network...</span>
                 </div>
             )}
@@ -167,26 +158,26 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
                 {/* SVG Connections and Rings */}
                 <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
                     {/* Inner Dashed Ring */}
-                    <circle 
-                        cx={dimensions.centerX} 
-                        cy={dimensions.centerY} 
-                        r={dimensions.innerRadius} 
-                        fill="none" 
-                        stroke="#D8B4FE" 
-                        strokeWidth="1.5" 
-                        strokeDasharray="4 4" 
+                    <circle
+                        cx={dimensions.centerX}
+                        cy={dimensions.centerY}
+                        r={dimensions.innerRadius}
+                        fill="none"
+                        stroke="#D8B4FE"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 4"
                         className="opacity-40"
                     />
-                    
+
                     {/* Outer Dashed Ring */}
-                    <circle 
-                        cx={dimensions.centerX} 
-                        cy={dimensions.centerY} 
-                        r={dimensions.outerRadius} 
-                        fill="none" 
-                        stroke="#D8B4FE" 
-                        strokeWidth="1.5" 
-                        strokeDasharray="4 4" 
+                    <circle
+                        cx={dimensions.centerX}
+                        cy={dimensions.centerY}
+                        r={dimensions.outerRadius}
+                        fill="none"
+                        stroke="#D8B4FE"
+                        strokeWidth="1.5"
+                        strokeDasharray="4 4"
                         className="opacity-40"
                     />
 
@@ -195,28 +186,28 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
                         const anchor = positions[`anchor_${p.id}`];
                         const card = positions[`card_${p.id}`];
                         if (!anchor || !card) return null;
-                        
+
                         return (
                             <g key={p.id}>
                                 {/* Node on the ring */}
-                                <circle 
-                                    cx={anchor.cx} 
-                                    cy={anchor.cy} 
-                                    r="4" 
-                                    fill="white" 
-                                    stroke="#A855F7" 
-                                    strokeWidth="2" 
+                                <circle
+                                    cx={anchor.cx}
+                                    cy={anchor.cy}
+                                    r="4"
+                                    fill="white"
+                                    stroke="#A855F7"
+                                    strokeWidth="2"
                                 />
                                 {/* Connecting line to card */}
-                                <motion.line 
-                                    x1={anchor.cx} 
-                                    y1={anchor.cy} 
-                                    x2={card.cx} 
-                                    y2={card.cy} 
-                                    stroke={hoveredPathId === p.id ? "#8B5CF6" : "#C4B5FD"} 
+                                <motion.line
+                                    x1={anchor.cx}
+                                    y1={anchor.cy}
+                                    x2={card.cx}
+                                    y2={card.cy}
+                                    stroke={hoveredPathId === p.id ? "#8B5CF6" : "#C4B5FD"}
                                     strokeWidth={hoveredPathId === p.id ? "2.5" : "1.5"}
                                     initial={false}
-                                    animate={{ 
+                                    animate={{
                                         stroke: hoveredPathId === p.id ? "#8B5CF6" : "#C4B5FD",
                                         strokeWidth: hoveredPathId === p.id ? 2.5 : 1.5,
                                         opacity: hoveredPathId === p.id ? 1 : 0.4
@@ -232,7 +223,7 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
                 {ringPaths.map((p) => {
                     const pos = positions[`card_${p.id}`];
                     if (!pos) return null;
-                    
+
                     return (
                         <React.Fragment key={p.id}>
                             <motion.div
@@ -241,17 +232,17 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
                                 onMouseEnter={() => setHoveredPathId(p.id)}
                                 onMouseLeave={() => setHoveredPathId(null)}
                                 className="absolute z-30 cursor-pointer group"
-                                style={{ 
-                                    left: pos.cx, 
-                                    top: pos.cy, 
+                                style={{
+                                    left: pos.cx,
+                                    top: pos.cy,
                                     width: dimensions.cardWidth,
                                     height: dimensions.cardHeight,
-                                    transform: 'translate(-50%, -50%)' 
+                                    transform: 'translate(-50%, -50%)'
                                 }}
                                 onClick={() => onPathClick(p)}
                             >
                                 <div className="w-full h-full bg-white/95 backdrop-blur-md rounded-xl shadow-[0_4px_20px_rgba(0,0,0,0.03)] border border-gray-100 p-2.5 flex items-center gap-3 hover:shadow-[0_12px_30px_rgba(168,85,247,0.08)] hover:border-purple-200 transition-all duration-500 group-active:scale-95">
-                                    <div 
+                                    <div
                                         className="w-9 h-9 rounded-lg overflow-hidden shrink-0 border border-gray-50 shadow-sm flex items-center justify-center bg-gray-50"
                                         style={{ backgroundColor: `${p.color}10` }}
                                     >
@@ -268,7 +259,7 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
                                 </div>
                             </motion.div>
 
-                            {/* Hover Card Popover styled exactly like Image 2 */}
+                            {/* Hover Card Popover */}
                             <AnimatePresence>
                                 {hoveredPathId === p.id && (
                                     <motion.div
@@ -285,7 +276,7 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
                                         onMouseLeave={() => setHoveredPathId(null)}
                                     >
                                         <div className="flex flex-col gap-2">
-                                            <span className="self-start px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[9px] font-extrabold uppercase tracking-wider">
+                                            <span className="self-start px-3 py-1 bg-purple-50 text-[#7C3AED] rounded-full text-[9px] font-extrabold uppercase tracking-wider">
                                                 {p.group || "Career"} result
                                             </span>
                                             <h3 className="text-xl font-bold text-slate-800 tracking-tight mt-1 leading-snug">
@@ -301,12 +292,12 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
                                             As a {p.name}, you would be responsible for designing, developing, and executing high-impact solutions. Your background in {formData.subject || "academics"}, coupled with skills in {formData.skills.slice(0, 2).join(", ") || "domains"} will guide your success.
                                         </p>
 
-                                        <button 
+                                        <button
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 onPathClick(p);
-                                            }} 
-                                            className="w-full py-3 bg-[#1B66EC] hover:bg-blue-700 text-white font-bold rounded-2xl text-center text-xs tracking-wide shadow-md active:scale-95 transition-all select-none"
+                                            }}
+                                            className="w-full py-3 bg-[#7C3AED] hover:bg-[#6D28D9] text-white font-bold rounded-2xl text-center text-xs tracking-wide shadow-md active:scale-95 transition-all select-none"
                                         >
                                             Learn more
                                         </button>
@@ -319,9 +310,9 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
                                             </p>
                                             <div className="flex items-center justify-between mt-1 select-none">
                                                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Helpful?</span>
-                                                <div className="flex gap-2.5 text-sm">
-                                                    <span className="cursor-pointer hover:scale-125 transition-transform" title="Not Helpful">👎</span>
-                                                    <span className="cursor-pointer hover:scale-125 transition-transform" title="Helpful">👍</span>
+                                                <div className="flex gap-4 text-xs font-semibold text-slate-500">
+                                                    <span className="cursor-pointer hover:text-red-500 transition-colors" title="Not Helpful">No</span>
+                                                    <span className="cursor-pointer hover:text-green-500 transition-colors" title="Helpful">Yes</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -333,7 +324,7 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
                 })}
 
                 {/* Central Hub Area */}
-                <div 
+                <div
                     className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center justify-center bg-white rounded-full border border-slate-100 shadow-[0_12px_32px_rgba(0,0,0,0.06)] z-20 pointer-events-none"
                     style={{ width: dimensions.innerRadius * 2, height: dimensions.innerRadius * 2 }}
                 >
@@ -341,8 +332,8 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
                     <div className="text-center space-y-1 p-4">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Explore paths</p>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">based on...</p>
-                        <div className="text-lg py-1 select-none">🎓 💪</div>
-                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 mx-auto animate-bounce" />
+                        <div className="text-xs font-semibold py-1 select-none text-slate-500">Skills & Interests</div>
+                        <span className="text-[10px] text-slate-400 mx-auto animate-bounce block select-none">▼</span>
                     </div>
                 </div>
             </div>
@@ -353,29 +344,29 @@ const CareerNetwork: React.FC<{ paths: any[]; onPathClick: (p: any) => void; isG
 // --- ROADMAP DETAIL MODAL ---
 const RoadmapDetailModal: React.FC<{ month: any; onClose: () => void }> = ({ month, onClose }) => {
     return (
-        <motion.div 
+        <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[2000] flex items-center justify-center p-4 sm:p-10 bg-slate-900/40 backdrop-blur-md"
         >
-            <motion.div 
+            <motion.div
                 initial={{ scale: 0.95, y: 30 }}
                 animate={{ scale: 1, y: 0 }}
                 className="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] shadow-[0_32px_120px_rgba(0,0,0,0.15)] relative"
             >
                 {/* MODAL HEADER STRIP */}
-                <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-600 via-cyan-400 to-emerald-400" />
-                
+                <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-[#7C3AED] via-purple-500 to-[#6D28D9]" />
+
                 <div className="p-8 sm:p-14">
-                    <button onClick={onClose} className="absolute top-10 right-10 p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all border border-slate-100 shadow-sm active:scale-95">
-                        <X className="w-5 h-5 text-slate-400" />
+                    <button onClick={onClose} className="absolute top-10 right-10 p-3 bg-slate-50 hover:bg-slate-100 rounded-2xl transition-all border border-slate-100 shadow-sm active:scale-95 text-slate-400 hover:text-slate-600 cursor-pointer">
+                        <span className="text-xl font-light leading-none">×</span>
                     </button>
 
                     <div className="space-y-12">
                         <div className="space-y-6">
                             <div className="flex items-center gap-3">
-                                <span className="inline-flex items-center justify-center w-12 h-12 bg-blue-600 rounded-2xl text-white font-black text-xl shadow-lg ring-4 ring-blue-50">
+                                <span className="inline-flex items-center justify-center w-12 h-12 bg-[#7C3AED] rounded-2xl text-white font-black text-xl shadow-lg ring-4 ring-purple-50">
                                     {month.month}
                                 </span>
                                 <div>
@@ -388,11 +379,11 @@ const RoadmapDetailModal: React.FC<{ month: any; onClose: () => void }> = ({ mon
                         <div className="grid lg:grid-cols-[1fr_0.8fr] gap-16">
                             <div className="space-y-10">
                                 <div className="space-y-6">
-                                    <h3 className="text-[12px] font-black text-slate-300 uppercase tracking-[0.3em] flex items-center gap-3"><Brain className="w-4 h-4" /> Strategic Core Focus</h3>
+                                    <h3 className="text-[12px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">Strategic Core Focus</h3>
                                     <div className="grid gap-4">
                                         {(month.tasks || []).map((task: string, i: number) => (
-                                            <div key={i} className="group p-5 bg-slate-50 rounded-2xl border border-slate-100/50 flex items-start gap-4 hover:bg-white hover:border-blue-200 hover:shadow-xl transition-all">
-                                                <div className="w-1.5 h-6 rounded-full bg-blue-500/20 group-hover:bg-blue-600 transition-colors" />
+                                            <div key={i} className="group p-5 bg-slate-50 rounded-2xl border border-slate-100/50 flex items-start gap-4 hover:bg-white hover:border-purple-200 hover:shadow-xl transition-all">
+                                                <div className="w-1.5 h-6 rounded-full bg-[#7C3AED]/20 group-hover:bg-[#7C3AED] transition-colors" />
                                                 <div>
                                                     <p className="font-bold text-[14px] text-slate-700 leading-tight mb-2 uppercase">{task}</p>
                                                     <span className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Requirement {i + 1}</span>
@@ -403,9 +394,9 @@ const RoadmapDetailModal: React.FC<{ month: any; onClose: () => void }> = ({ mon
                                 </div>
 
                                 <div className="p-8 bg-slate-900 rounded-3xl text-white space-y-6 overflow-hidden relative">
-                                    <div className="absolute top-0 right-0 w-32 h-32 bg-blue-600/20 rounded-full blur-3xl" />
+                                    <div className="absolute top-0 right-0 w-32 h-32 bg-purple-600/20 rounded-full blur-3xl" />
                                     <div className="flex items-center justify-between">
-                                        <h4 className="text-slate-400 text-[11px] font-black uppercase tracking-[0.3em] flex items-center gap-2"><Target className="w-4 h-4" /> Technical Blueprint</h4>
+                                        <h4 className="text-slate-400 text-[11px] font-black uppercase tracking-[0.3em] flex items-center gap-2">Technical Blueprint</h4>
                                         <div className="px-3 py-1 bg-white/10 rounded-lg text-[9px] font-black uppercase">Standard {month.month}.0</div>
                                     </div>
                                     <div className="grid sm:grid-cols-2 gap-8">
@@ -413,7 +404,7 @@ const RoadmapDetailModal: React.FC<{ month: any; onClose: () => void }> = ({ mon
                                             <div className="text-[10px] text-slate-500 font-black uppercase tracking-widest leading-none">Primary Stack</div>
                                             <div className="flex flex-wrap gap-2">
                                                 {(month.stack || []).map((s: string) => (
-                                                    <span key={s} className="px-2.5 py-1.5 bg-blue-600 text-white rounded-lg text-[10px] font-black uppercase tracking-tight shadow-sm border border-blue-500/50">#{s}</span>
+                                                    <span key={s} className="px-2.5 py-1.5 bg-purple-600 text-white rounded-lg text-[10px] font-black uppercase tracking-tight shadow-sm border border-purple-500/50">#{s}</span>
                                                 ))}
                                             </div>
                                         </div>
@@ -431,34 +422,34 @@ const RoadmapDetailModal: React.FC<{ month: any; onClose: () => void }> = ({ mon
 
                             <div className="space-y-10">
                                 <div className="space-y-6">
-                                    <h3 className="text-[12px] font-black text-slate-300 uppercase tracking-[0.3em] flex items-center gap-3"><Flag className="w-4 h-4" /> Industrial Milestone</h3>
+                                    <h3 className="text-[12px] font-black text-slate-400 uppercase tracking-[0.3em] flex items-center gap-3">Industrial Milestone</h3>
                                     <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-8 space-y-6 relative group overflow-hidden">
-                                        <div className="absolute top-0 right-0 w-24 h-24 bg-blue-50/50 rounded-full blur-2xl group-hover:bg-blue-100transition-all" />
+                                        <div className="absolute top-0 right-0 w-24 h-24 bg-purple-50/50 rounded-full blur-2xl group-hover:bg-purple-100 transition-all" />
                                         <h4 className="text-2xl font-black text-slate-900 uppercase leading-tight relative z-10">{month.project}</h4>
                                         <p className="text-slate-500 text-sm leading-relaxed font-medium relative z-10">Deliver a production-ready implementation focused on architectural scalability and real-world performance for Phase {month.month}.</p>
                                         <div className="space-y-3 pt-2 relative z-10">
                                             <div className="flex items-center gap-3 text-[11px] font-black text-slate-900 border-b border-slate-50 pb-3">
-                                                <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" /> SCALABLE MODULES
+                                                <div className="w-2 h-2 rounded-full bg-[#7C3AED] shadow-[0_0_8px_rgba(124,58,237,0.5)]" /> SCALABLE MODULES
                                             </div>
                                             <div className="flex items-center gap-3 text-[11px] font-black text-slate-900">
-                                                <div className="w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]" /> QUALITY ASSURANCE
+                                                <div className="w-2 h-2 rounded-full bg-[#7C3AED] shadow-[0_0_8px_rgba(124,58,237,0.5)]" /> QUALITY ASSURANCE
                                             </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="p-8 bg-blue-50 rounded-3xl border border-blue-100/50 space-y-6">
+                                <div className="p-8 bg-purple-50 rounded-3xl border border-purple-100/50 space-y-6">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 bg-white rounded-xl shadow-sm flex items-center justify-center">
-                                            <PlayCircle className="w-5 h-5 text-blue-600" />
+                                            <div className="w-0 h-0 border-t-[6px] border-t-transparent border-b-[6px] border-b-transparent border-l-[10px] border-l-[#7C3AED] ml-1" />
                                         </div>
                                         <div>
-                                            <h4 className="font-black text-[12px] text-blue-900 uppercase tracking-tight">Curated Module</h4>
-                                            <p className="text-blue-600/70 text-[10px] uppercase font-bold tracking-widest">Recommended Training</p>
+                                            <h4 className="font-black text-[12px] text-purple-900 uppercase tracking-tight">Curated Module</h4>
+                                            <p className="text-purple-600/70 text-[10px] uppercase font-bold tracking-widest">Recommended Training</p>
                                         </div>
                                     </div>
-                                    <p className="text-blue-900/60 text-[13px] font-medium leading-relaxed">Directly align your phase with the StudLyf Accelerator curriculum for this specialization.</p>
-                                    <button className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] hover:bg-blue-700 transition-all shadow-lg active:scale-95">Enroll in Protocol →</button>
+                                    <p className="text-purple-900/60 text-[13px] font-medium leading-relaxed">Directly align your phase with the StudLyf Accelerator curriculum for this specialization.</p>
+                                    <button className="w-full py-4 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-2xl font-black text-[11px] uppercase tracking-[0.2em] transition-all shadow-lg active:scale-95 cursor-pointer">Enroll in Protocol →</button>
                                 </div>
                             </div>
                         </div>
@@ -469,10 +460,9 @@ const RoadmapDetailModal: React.FC<{ month: any; onClose: () => void }> = ({ mon
     );
 };
 
-// --- ROADMAP CARD COMPONENT ---
 const RoadmapCard: React.FC<{ month: any; idx: number; isLast: boolean; onDetails: (m: any) => void }> = ({ month, idx, isLast, onDetails }) => {
     return (
-        <motion.div 
+        <motion.div
             initial={{ opacity: 0, x: -20 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-50px" }}
@@ -481,57 +471,54 @@ const RoadmapCard: React.FC<{ month: any; idx: number; isLast: boolean; onDetail
         >
             {/* Architectural Vertical Connector */}
             {!isLast && (
-                <div className="absolute left-[15px] sm:left-[60px] top-12 bottom-0 w-[1px] bg-slate-200 transition-colors duration-500 group-hover/card:bg-blue-400" />
+                <div className="absolute left-[15px] sm:left-[60px] top-12 bottom-0 w-[1px] bg-slate-200 transition-colors duration-500 group-hover/card:bg-[#7C3AED]" />
             )}
-            
+
             {/* Engineering Node */}
-            <div className="absolute left-[10px] sm:left-[55px] top-10 w-[12px] h-[12px] rounded-full bg-white border-2 border-slate-300 z-10 shadow-[0_0_0_4px_white] transition-all duration-500 group-hover/card:border-blue-600 group-hover/card:shadow-[0_0_0_4px_white,0_0_15px_rgba(37,99,235,0.4)]" />
+            <div className="absolute left-[10px] sm:left-[55px] top-10 w-[12px] h-[12px] rounded-full bg-white border-2 border-slate-300 z-10 shadow-[0_0_0_4px_white] transition-all duration-500 group-hover/card:border-[#7C3AED] group-hover/card:shadow-[0_0_0_4px_white,0_0_15px_rgba(124,58,237,0.4)]" />
 
             {/* Technical Month Indicator */}
             <div className="absolute left-0 sm:left-0 top-9 w-24 hidden sm:flex flex-col items-end pr-8 transition-all duration-500">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 transition-colors group-hover/card:text-amber-500">Phase</span>
-                <span className="text-2xl font-bold text-slate-800 tabular-nums leading-none transition-colors group-hover/card:text-amber-600">{month.month.toString().padStart(2, '0')}</span>
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1 transition-colors group-hover/card:text-[#7C3AED]">Phase</span>
+                <span className="text-2xl font-bold text-slate-800 tabular-nums leading-none transition-colors group-hover/card:text-[#7C3AED]">{month.month.toString().padStart(2, '0')}</span>
             </div>
 
             {/* Professional Content Card */}
-            <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-10 hover:shadow-[0_20px_50px_rgba(0,0,0,0.06)] hover:border-amber-200 transition-all duration-500 relative overflow-hidden group/card">
+            <div className="bg-white border border-slate-200/80 rounded-2xl p-6 sm:p-10 hover:shadow-[0_20px_50px_rgba(0,0,0,0.06)] hover:border-purple-200/50 transition-all duration-500 relative overflow-hidden group/card">
                 {/* Dynamic Line Effect on Hover (Contrast Color) */}
-                <div className="absolute left-0 top-0 bottom-0 w-0 bg-amber-500 transition-all duration-500 group-hover/card:w-1.5 shadow-[2px_0_15px_rgba(245,158,11,0.4)] z-20" />
-                
+                <div className="absolute left-0 top-0 bottom-0 w-0 bg-[#7C3AED] transition-all duration-500 group-hover/card:w-1.5 shadow-[2px_0_15px_rgba(124,58,237,0.4)] z-20" />
+
                 {/* Architectural Grid Background (Subtle) */}
                 <div className="absolute inset-0 opacity-[0.03] pointer-events-none" style={{ backgroundImage: 'linear-gradient(#000 1px, transparent 1px), linear-gradient(90deg, #000 1px, transparent 1px)', backgroundSize: '20px 20px' }} />
-                
+
                 <div className="flex flex-col xl:flex-row justify-between items-start gap-8 relative z-10">
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-4 mb-4">
-                            <h3 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-tight group-hover/card:text-amber-600 transition-colors duration-300">{month.title}</h3>
-                            <span className="shrink-0 px-2.5 py-1 bg-amber-50 text-amber-700 text-[10px] font-black rounded-lg uppercase tracking-widest border border-amber-100">Validated</span>
+                            <h3 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight leading-tight group-hover/card:text-[#7C3AED] transition-colors duration-300">{month.title}</h3>
+                            <span className="shrink-0 px-2.5 py-1 bg-purple-50 text-[#7C3AED] text-[10px] font-black rounded-lg uppercase tracking-widest border border-purple-100/50">Validated</span>
                         </div>
                         <p className="text-slate-500 text-[13px] font-medium leading-relaxed max-w-2xl">{month.details || month.tasks?.[0] || "Synthesizing specialized technical curriculum and operational milestones."}</p>
                     </div>
-                    
-                    <button 
+
+                    <button
                         onClick={() => onDetails(month)}
-                        className="shrink-0 group/btn px-6 py-3 bg-slate-900 text-white rounded-xl hover:bg-blue-600 transition-all flex items-center gap-3 shadow-lg shadow-slate-200 active:scale-95"
+                        className="shrink-0 group/btn px-6 py-3 bg-slate-900 text-white rounded-xl hover:bg-[#7C3AED] transition-all flex items-center gap-3 shadow-lg shadow-slate-200 active:scale-95 cursor-pointer"
                     >
                         <span className="text-[11px] font-black uppercase tracking-widest">Analysis Specs</span>
-                        <ArrowRight className="w-4 h-4 transition-transform group-hover/btn:translate-x-1" />
+                        <span className="text-sm transition-transform group-hover/btn:translate-x-1">→</span>
                     </button>
                 </div>
-                
+
                 {/* Technical Specifications Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-10 relative z-10">
                     {/* Stack Specification */}
                     <div className="bg-slate-50/50 rounded-xl p-6 border border-slate-100/50">
                         <div className="flex items-center gap-3 mb-5">
-                            <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm">
-                                <Terminal className="w-4 h-4 text-blue-600" />
-                            </div>
                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Technical Stack</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {(Array.isArray(month.stack) ? month.stack : (month.stack || '').split(',')).map((s: any, i: number) => (
-                                <span key={i} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-[11px] font-bold rounded-lg shadow-sm hover:border-blue-400 hover:text-blue-600 transition-all cursor-default">
+                                <span key={i} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-[11px] font-bold rounded-lg shadow-sm hover:border-purple-400 hover:text-[#7C3AED] transition-all cursor-default">
                                     {s.toString().trim()}
                                 </span>
                             ))}
@@ -541,14 +528,11 @@ const RoadmapCard: React.FC<{ month: any; idx: number; isLast: boolean; onDetail
                     {/* Competency Specification */}
                     <div className="bg-slate-50/50 rounded-xl p-6 border border-slate-100/50">
                         <div className="flex items-center gap-3 mb-5">
-                            <div className="p-2 bg-white rounded-lg border border-slate-200 shadow-sm">
-                                <TrendingUp className="w-4 h-4 text-green-600" />
-                            </div>
                             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Core Competencies</span>
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {(Array.isArray(month.concepts) ? month.concepts : (month.concepts || '').split(',')).map((c: any, i: number) => (
-                                <span key={i} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-[11px] font-bold rounded-lg shadow-sm hover:border-green-400 hover:text-green-600 transition-all cursor-default">
+                                <span key={i} className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 text-[11px] font-bold rounded-lg shadow-sm hover:border-purple-400 hover:text-[#7C3AED] transition-all cursor-default">
                                     {c.toString().trim()}
                                 </span>
                             ))}
@@ -560,10 +544,10 @@ const RoadmapCard: React.FC<{ month: any; idx: number; isLast: boolean; onDetail
     );
 };
 
-const RoadmapSection: React.FC<{ 
-    roadmapData: any; 
-    selectedPath: any; 
-    isGeneratingRoadmap: boolean; 
+const RoadmapSection: React.FC<{
+    roadmapData: any;
+    selectedPath: any;
+    isGeneratingRoadmap: boolean;
     handlePathClick: (p: any) => void;
     onDetails: (m: any) => void;
     navigate: any;
@@ -580,12 +564,12 @@ const RoadmapSection: React.FC<{
             {/* Section Heading with Technical Specs */}
             <div className="mb-20">
                 <div className="flex items-center gap-3 mb-6">
-                    <div className="w-10 h-[1px] bg-blue-600" />
-                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.3em]">Operational Protocol 741</span>
+                    <div className="w-10 h-[1px] bg-[#7C3AED]" />
+                    <span className="text-[10px] font-black text-[#7C3AED] uppercase tracking-[0.3em]">Operational Protocol 741</span>
                 </div>
                 <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-10">
                     <div className="max-w-3xl">
-                        <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1] mb-6">Career Architecture<br/><span className="text-slate-400">Blueprint</span></h2>
+                        <h2 className="text-4xl sm:text-5xl font-bold text-slate-900 tracking-tight leading-[1.1] mb-6">Career Architecture<br /><span className="text-slate-400">Blueprint</span></h2>
                         <p className="text-slate-500 text-base sm:text-lg font-medium leading-relaxed">
                             A validated 6-month technical progression strategy engineered for professional excellence and industry standard compliance.
                         </p>
@@ -596,7 +580,7 @@ const RoadmapSection: React.FC<{
                                 <img src={selectedPath.image} alt="" className="w-full h-full object-cover grayscale opacity-80" />
                             </div>
                             <div>
-                                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Selected Discipline</p>
+                                <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-1">Selected Discipline</p>
                                 <p className="text-xl font-bold text-white leading-tight">{selectedPath.name}</p>
                             </div>
                         </div>
@@ -606,10 +590,10 @@ const RoadmapSection: React.FC<{
 
             <div className="relative">
                 {isGeneratingRoadmap ? (
-                    <div className="py-40 flex flex-col items-center justify-center bg-slate-50 border border-slate-200 rounded-[2rem] border-dashed">
+                    <div className="py-40 flex flex-col items-center justify-center bg-white border border-slate-200/80 rounded-[2rem] border-dashed">
                         <div className="relative w-16 h-16 mb-8">
-                            <div className="absolute inset-0 border-4 border-blue-50 rounded-full" />
-                            <div className="absolute inset-0 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                            <div className="absolute inset-0 border-4 border-purple-50 rounded-full" />
+                            <div className="absolute inset-0 border-4 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
                         </div>
                         <h3 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Compiling System Architecture</h3>
                         <p className="text-sm text-slate-500 mt-2 font-medium">Synchronizing with industry standard technical vectors...</p>
@@ -617,28 +601,28 @@ const RoadmapSection: React.FC<{
                 ) : roadmapData && roadmapData.length > 0 ? (
                     <div className="space-y-0 relative">
                         {roadmapData.map((month: any, idx: number) => (
-                            <RoadmapCard 
-                                key={idx} 
-                                month={month} 
-                                idx={idx} 
+                            <RoadmapCard
+                                key={idx}
+                                month={month}
+                                idx={idx}
                                 isLast={idx === roadmapData.length - 1}
-                                onDetails={onDetails} 
+                                onDetails={onDetails}
                             />
                         ))}
                     </div>
                 ) : selectedPath ? (
-                    <div className="py-40 flex flex-col items-center justify-center bg-slate-50 border border-slate-200 rounded-[2rem] border-dashed">
+                    <div className="py-40 flex flex-col items-center justify-center bg-white border border-slate-200/80 rounded-[2rem] border-dashed">
                         <div className="relative w-16 h-16 mb-8">
-                            <div className="absolute inset-0 border-4 border-slate-100 rounded-full" />
-                            <div className="absolute inset-0 border-4 border-[#1B66EC] border-t-transparent rounded-full animate-spin" />
+                            <div className="absolute inset-0 border-4 border-purple-50 rounded-full" />
+                            <div className="absolute inset-0 border-4 border-[#7C3AED] border-t-transparent rounded-full animate-spin" />
                         </div>
                         <h3 className="text-xl font-bold text-slate-900 uppercase tracking-tight">Compiling System Architecture</h3>
                         <p className="text-sm text-slate-500 mt-2 font-medium">Synchronizing with industry standard technical vectors...</p>
                     </div>
                 ) : (
-                    <div className="py-32 text-center bg-slate-50 border border-slate-200 rounded-[2.5rem] border-dashed">
-                        <div className="p-6 bg-white rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-8 shadow-sm">
-                            <Network className="w-8 h-8 text-slate-300" />
+                    <div className="py-32 text-center bg-white border border-slate-200/80 rounded-[2.5rem] border-dashed">
+                        <div className="p-6 bg-white rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-8 shadow-sm border border-slate-100">
+                            <div className="w-6 h-6 rounded-full border-2 border-slate-200 border-dashed animate-pulse" />
                         </div>
                         <h3 className="text-lg font-bold text-slate-400 tracking-tight uppercase px-6">Select a network vector above to review technical specifications.</h3>
                     </div>
@@ -648,17 +632,17 @@ const RoadmapSection: React.FC<{
 
             {/* FINAL CTA */}
             {roadmapData && !isGeneratingRoadmap && (
-                <div className="mt-20 pt-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-6 bg-slate-50 p-6 md:p-8 rounded-2xl border mb-32">
+                <div className="mt-20 pt-8 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-6 bg-white p-6 md:p-8 rounded-[2rem] border border-slate-100 shadow-sm mb-32">
                     <div>
                         <h3 className="text-base font-bold text-slate-900">Ready to initiate training?</h3>
                         <p className="text-sm text-slate-500 font-medium mt-1">Access specialized modules aligned with your technical roadmap.</p>
                     </div>
                     <div className="flex flex-wrap gap-4">
-                        <button className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-lg hover:bg-slate-50 transition-colors shadow-sm uppercase tracking-wider">
+                        <button className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 text-xs font-bold rounded-2xl hover:bg-slate-50 transition-colors shadow-sm uppercase tracking-wider cursor-pointer">
                             Export System PDF
                         </button>
-                        <button onClick={() => navigate('/courses')} className="px-5 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm uppercase tracking-wider flex items-center gap-2">
-                            View Course Catalog <ArrowRight className="w-3.5 h-3.5" />
+                        <button onClick={() => navigate('/courses')} className="px-5 py-2.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-bold rounded-2xl transition-colors shadow-sm uppercase tracking-wider flex items-center gap-2 cursor-pointer">
+                            View Course Catalog <span className="font-bold">→</span>
                         </button>
                     </div>
                 </div>
@@ -685,18 +669,18 @@ const wordVariants = {
 
 // --- SUBJECT AREAS catalog (shown as quick-pick chips on Step 2) ---
 const SUBJECT_AREAS = [
-    { label: 'Computer Science (CSE)', icon: '💻', keywords: ['cse', 'computer science'] },
-    { label: 'Information Technology', icon: '🌐', keywords: ['it', 'information technology'] },
-    { label: 'Software Engineering', icon: '🛠️', keywords: ['software'] },
-    { label: 'Electronics & ECE', icon: '⚡', keywords: ['ece', 'electronics'] },
-    { label: 'Mechanical Engineering', icon: '⚙️', keywords: ['mechanical', 'me'] },
-    { label: 'Data Science & AI/ML', icon: '🤖', keywords: ['data', 'ai', 'ml'] },
-    { label: 'Business & MBA', icon: '📊', keywords: ['mba', 'business'] },
-    { label: 'Medical / Healthcare', icon: '🏥', keywords: ['medical', 'healthcare', 'mbbs'] },
-    { label: 'Design (UX/UI)', icon: '🎨', keywords: ['design', 'ux', 'ui'] },
-    { label: 'Cyber Security', icon: '🔐', keywords: ['cyber', 'security'] },
-    { label: 'Civil Engineering', icon: '🏗️', keywords: ['civil'] },
-    { label: 'Robotics & Automation', icon: '🦾', keywords: ['robotics', 'automation'] },
+    { label: 'Computer Science (CSE)', keywords: ['cse', 'computer science'] },
+    { label: 'Information Technology', keywords: ['it', 'information technology'] },
+    { label: 'Software Engineering', keywords: ['software'] },
+    { label: 'Electronics & ECE', keywords: ['ece', 'electronics'] },
+    { label: 'Mechanical Engineering', keywords: ['mechanical', 'me'] },
+    { label: 'Data Science & AI/ML', keywords: ['data', 'ai', 'ml'] },
+    { label: 'Business & MBA', keywords: ['mba', 'business'] },
+    { label: 'Medical / Healthcare', keywords: ['medical', 'healthcare', 'mbbs'] },
+    { label: 'Design (UX/UI)', keywords: ['design', 'ux', 'ui'] },
+    { label: 'Cyber Security', keywords: ['cyber', 'security'] },
+    { label: 'Civil Engineering', keywords: ['civil'] },
+    { label: 'Robotics & Automation', keywords: ['robotics', 'automation'] },
 ];
 
 // --- SKILL CATALOG with descriptions (shown on Step 2.5) ---
@@ -977,7 +961,7 @@ const CareerOnboarding: React.FC = () => {
     const [activeTab, setActiveTab] = useState<'Identity' | 'Paths'>('Identity');
     const [selectedDetailMonth, setSelectedDetailMonth] = useState<any>(null);
     const [carouselIndex, setCarouselIndex] = useState(0);
-    
+
     const [formData, setFormData] = useState({
         role: '',
         level: 'Bachelor\'s degree',
@@ -985,8 +969,15 @@ const CareerOnboarding: React.FC = () => {
         skills: [] as string[],
         interests: [] as string[],
         experience: ["Summer Engineering Internship"],
-        traits: ["Analytical", "Collaborative"]
+        traits: ["Analytical", "Collaborative"],
+        projects: '',
+        clubs: '',
+        ambitions: '',
+        work_preferences: ''
     });
+
+    const [skillVector, setSkillVector] = useState<Record<string, number>>({});
+    const [transferableSkills, setTransferableSkills] = useState<any[]>([]);
 
     const [organization, setOrganization] = useState('');
     const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
@@ -1070,76 +1061,6 @@ const CareerOnboarding: React.FC = () => {
         }
     };
 
-    const renderIllustration = (type: string) => {
-        const baseClass = "w-full h-full flex items-center justify-center p-6 relative";
-        const iconType = (type || "").toLowerCase();
-        if (iconType === 'analytics') {
-            return (
-                <div className={baseClass}>
-                    <svg className="w-28 h-28 text-[#4285F4]" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="22" y="60" width="10" height="20" rx="3" fill="#4285F4" />
-                        <rect x="42" y="45" width="10" height="35" rx="3" fill="#4285F4" />
-                        <rect x="62" y="30" width="10" height="50" rx="3" fill="#3B82F6" opacity="0.8" />
-                        <path d="M15 80 H85" stroke="#E2E8F0" strokeWidth="3" strokeLinecap="round" />
-                        <circle cx="47" cy="48" r="15" stroke="#4285F4" strokeWidth="3.5" fill="white" />
-                        <path d="M57 58 L72 72" stroke="#4285F4" strokeWidth="4.5" strokeLinecap="round" />
-                        <path d="M43 48 H51 M47 44 V52" stroke="#EA4335" strokeWidth="2.5" strokeLinecap="round" />
-                    </svg>
-                </div>
-            );
-        } else if (iconType === 'cloud') {
-            return (
-                <div className={baseClass}>
-                    <svg className="w-28 h-28 text-[#4285F4]" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M30 65 C30 55 38 47 48 47 C51 38 59 34 68 36 C76 38 82 46 82 55 C88 55 92 60 92 66 C92 72 87 77 81 77 H31 C25 77 20 72 20 66 C20 60 25 55 30 65 Z" fill="#E8F0FE" stroke="#4285F4" strokeWidth="3.5" />
-                        <circle cx="50" cy="62" r="6" fill="#34A853" />
-                        <path d="M35 62 H65" stroke="#4285F4" strokeWidth="2" strokeDasharray="4 4" />
-                    </svg>
-                </div>
-            );
-        } else if (iconType === 'security') {
-            return (
-                <div className={baseClass}>
-                    <svg className="w-28 h-28 text-[#34A853]" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M50 18 C67 18 82 23 82 23 V50 C82 69 68 80 50 84 C32 80 18 69 18 50 V23 C18 23 33 18 50 18 Z" fill="#E6F4EA" stroke="#34A853" strokeWidth="3.5" />
-                        <path d="M40 50 L47 57 L60 44" stroke="#34A853" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                </div>
-            );
-        } else if (iconType === 'pm') {
-            return (
-                <div className={baseClass}>
-                    <svg className="w-28 h-28 text-[#FBBC05]" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="18" y="22" width="64" height="56" rx="10" fill="#FEF7E0" stroke="#FBBC05" strokeWidth="3.5" />
-                        <line x1="28" y1="38" x2="72" y2="38" stroke="#FBBC05" strokeWidth="3" strokeLinecap="round" />
-                        <line x1="28" y1="50" x2="55" y2="50" stroke="#FBBC05" strokeWidth="3" strokeLinecap="round" />
-                        <line x1="28" y1="62" x2="62" y2="62" stroke="#FBBC05" strokeWidth="3" strokeLinecap="round" />
-                        <circle cx="70" cy="56" r="6" fill="#EA4335" />
-                    </svg>
-                </div>
-            );
-        } else if (iconType === 'design') {
-            return (
-                <div className={baseClass}>
-                    <svg className="w-28 h-28 text-[#A855F7]" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="38" cy="50" r="24" fill="#F3E8FF" stroke="#A855F7" strokeWidth="3.5" />
-                        <circle cx="62" cy="50" r="24" fill="#F3E8FF" stroke="#A855F7" strokeWidth="3.5" strokeDasharray="5 5" />
-                        <path d="M43 32 L57 68" stroke="#A855F7" strokeWidth="3.5" strokeLinecap="round" />
-                    </svg>
-                </div>
-            );
-        } else {
-            return (
-                <div className={baseClass}>
-                    <svg className="w-28 h-28 text-[#4285F4]" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <rect x="20" y="20" width="60" height="60" rx="12" fill="#E8F0FE" stroke="#4285F4" strokeWidth="3.5" />
-                        <path d="M32 38 H68 M32 50 H68 M32 62 H52" stroke="#4285F4" strokeWidth="3.5" strokeLinecap="round" />
-                    </svg>
-                </div>
-            );
-        }
-    };
-
     const fetchCourses = async (pathName: string) => {
         setIsGeneratingCourses(true);
         setCarouselIndex(0); // reset carousel to first slide for new path
@@ -1159,7 +1080,7 @@ const CareerOnboarding: React.FC = () => {
                 setCarouselIndex(0);
             }
         } catch (err) {
-            try { console.error("Failed to fetch certifications:", err instanceof Error ? err.message : String(err)); } catch (_) {}
+            try { console.error("Failed to fetch certifications:", err instanceof Error ? err.message : String(err)); } catch (_) { }
         } finally {
             setIsGeneratingCourses(false);
         }
@@ -1186,7 +1107,7 @@ const CareerOnboarding: React.FC = () => {
                 setPathDetails((prev: any) => prev ? { ...prev, day_in_the_life: data.day_in_the_life } : null);
             }
         } catch (err) {
-            try { console.error("Day in the life regeneration failed:", err instanceof Error ? err.message : String(err)); } catch (_) {}
+            try { console.error("Day in the life regeneration failed:", err instanceof Error ? err.message : String(err)); } catch (_) { }
         } finally {
             setIsRegeneratingDay(false);
         }
@@ -1212,7 +1133,7 @@ const CareerOnboarding: React.FC = () => {
                 setInsightData(data);
             }
         } catch (err) {
-            try { console.error("Failed to fetch insights:", err instanceof Error ? err.message : String(err)); } catch (_) {}
+            try { console.error("Failed to fetch insights:", err instanceof Error ? err.message : String(err)); } catch (_) { }
             setInsightData({
                 importance: `Mastering this is vital to execute operational and high-fidelity frameworks for becoming a successful ${selectedPath?.name || "Professional"}.`,
                 mastery_steps: [
@@ -1236,137 +1157,33 @@ const CareerOnboarding: React.FC = () => {
         if (s.includes("mba") || s.includes("business") || s.includes("management")) return ["Strategic Planning", "Market Research", "Excel Modeling", "Public Speaking"];
         if (s.includes("robotics")) return ["ROS", "Embedded Systems", "Sensor Fusion", "CAD"];
         if (s.includes("data") || s.includes("aiml") || s.includes("ai")) return ["Python", "Machine Learning", "Data Visualization", "SQL"];
-        return ["Communication", "Problem Solving", "Adaptability"];
+        return ["Communication", "Problem Solving", "Teamwork", "Adaptability"];
     };
 
-    const fetchIdentity = useCallback(async () => {
-        setIsGeneratingIdentity(true);
-        try {
-            const res = await fetch(`${API_BASE}/api/career/identity`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    subject: formData.subject, 
-                    skills: formData.skills, 
-                    interests: formData.interests,
-                    role: formData.role
-                })
-            });
-            const data = await res.json();
-            if (data.identity_statement) setIdentityStatement(data.identity_statement);
-        } catch (err) {
-            try { console.error("Identity fetch failed:", err instanceof Error ? err.message : String(err)); } catch (_) {}
-        } finally {
-            setIsGeneratingIdentity(false);
-        }
-    }, [formData.subject, formData.skills, formData.interests, formData.role, API_BASE]);
-
-    const fetchPaths = useCallback(async () => {
-        if (isGeneratingPaths) return;
-        setIsGeneratingPaths(true);
-        try {
-            const res = await fetch(`${API_BASE}/api/career/explore-paths`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    subject: formData.subject, 
-                    skills: formData.skills, 
-                    interests: formData.interests,
-                    role: formData.role
-                })
-            });
-            const data = await res.json();
-            if (data && data.paths && data.paths.length > 0) {
-                setGeneratedPaths(data.paths);
-            } else {
-                setGeneratedPaths(DEFAULT_PATHS);
-            }
-        } catch (err) {
-            try { console.error("Paths fetch failed:", err instanceof Error ? err.message : String(err)); } catch (_) {}
-            setGeneratedPaths(DEFAULT_PATHS);
-        } finally {
-            setIsGeneratingPaths(false);
-        }
-    }, [formData.subject, formData.skills, formData.interests, formData.role, isGeneratingPaths, API_BASE]);
-
-    const fetchIdentityDirect = async (dataToUse: typeof formData) => {
-        setIsGeneratingIdentity(true);
-        try {
-            const res = await fetch(`${API_BASE}/api/career/identity`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    subject: dataToUse.subject, 
-                    skills: dataToUse.skills, 
-                    interests: dataToUse.interests,
-                    role: dataToUse.role
-                })
-            });
-            const data = await res.json();
-            if (data.identity_statement) setIdentityStatement(data.identity_statement);
-        } catch (err) {
-            try { console.error("Identity fetch failed:", err instanceof Error ? err.message : String(err)); } catch (_) {}
-        } finally {
-            setIsGeneratingIdentity(false);
-        }
-    };
-
-    const fetchPathsDirect = async (dataToUse: typeof formData) => {
-        if (isGeneratingPaths) return;
-        setIsGeneratingPaths(true);
-        try {
-            const res = await fetch(`${API_BASE}/api/career/explore-paths`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    subject: dataToUse.subject, 
-                    skills: dataToUse.skills, 
-                    interests: dataToUse.interests,
-                    role: dataToUse.role
-                })
-            });
-            const data = await res.json();
-            if (data && data.paths && data.paths.length > 0) {
-                setGeneratedPaths(data.paths);
-            } else {
-                setGeneratedPaths(DEFAULT_PATHS);
-            }
-        } catch (err) {
-            try { console.error("Paths fetch failed:", err instanceof Error ? err.message : String(err)); } catch (_) {}
-            setGeneratedPaths(DEFAULT_PATHS);
-        } finally {
-            setIsGeneratingPaths(false);
-        }
-    };
-
-    const handleAnalyze = async () => {
-        const isStudent = formData.role.toLowerCase().includes('student');
-        if (isStudent && !formData.subject) {
-            alert("Please enter your academic trajectory.");
-            return;
-        }
+    const handleAnalyze = async (dataToUse: typeof formData) => {
         setIsAnalyzing(true);
         setGeneratedPaths([]);
         setRoadmapData(null);
         setSelectedPath(null);
-        
-        let updatedExp = [...formData.experience];
-        let updatedSubject = formData.subject;
-        let updatedSkills = [...formData.skills];
+
+        let updatedExp = [...dataToUse.experience];
+        let updatedSubject = dataToUse.subject;
+        let updatedSkills = [...dataToUse.skills];
+        const isStudent = dataToUse.role.toLowerCase().includes('student');
 
         if (!isStudent) {
-            const expString = organization ? `${formData.role} at ${organization}` : formData.role;
+            const expString = organization ? `${dataToUse.role} at ${organization}` : dataToUse.role;
             updatedExp = [expString];
             updatedSubject = ''; // No field of study for non-students
         } else {
             // Keep user-selected skills from step 2.5; only derive defaults if none were picked
             if (updatedSkills.length === 0) {
-                updatedSkills = getDefaultSkillsForSubject(formData.subject);
+                updatedSkills = getDefaultSkillsForSubject(dataToUse.subject);
             }
         }
 
         const nextFormData = {
-            ...formData,
+            ...dataToUse,
             experience: updatedExp,
             subject: updatedSubject,
             skills: updatedSkills
@@ -1374,40 +1191,75 @@ const CareerOnboarding: React.FC = () => {
 
         setFormData(nextFormData);
 
-        // Pre-compute a premium static fallback identity statement so the card is never empty.
-        const skillsPreview = updatedSkills.slice(0, 3).join(', ') || 'core domain skills';
-        const staticFallback = nextFormData.subject
-            ? `As a driven and intellectually curious ${nextFormData.role}, I have cultivated deep expertise in ${nextFormData.subject}, developing a strong command of ${skillsPreview}. My academic journey has been defined by a rigorous commitment to solving real-world challenges through innovation and structured analytical thinking. I am now channelling this expertise to design scalable, high-impact solutions that bridge academic theory with industry-grade practice, positioning myself to lead transformative initiatives in my chosen domain.`
-            : `Leveraging a proven professional track record as a ${nextFormData.role}${organization ? ` at ${organization}` : ''}, I have built deep operational expertise across ${skillsPreview}. My career trajectory is driven by a relentless focus on delivering measurable impact — from designing optimized frameworks to spearheading cross-functional initiatives. I combine strategic thinking with hands-on execution, consistently translating complex challenges into scalable, high-value outcomes that accelerate organisational growth.`;
-        setIdentityStatement(staticFallback);
-
         try {
-            await Promise.all([
-                fetchIdentityDirect(nextFormData),
-                fetchPathsDirect(nextFormData)
-            ]);
+            const res = await fetch(`${API_BASE}/api/career/analyze`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    subject: nextFormData.subject,
+                    skills: nextFormData.skills,
+                    interests: nextFormData.interests,
+                    role: nextFormData.role,
+                    projects: nextFormData.projects,
+                    clubs: nextFormData.clubs,
+                    ambitions: nextFormData.ambitions,
+                    work_preferences: nextFormData.work_preferences,
+                    selected_tasks: selectedTasks
+                })
+            });
+            const data = await res.json();
+            if (data) {
+                setSkillVector(data.skill_vector || {});
+                setTransferableSkills(data.inferences || []);
+                if (data.roles && data.roles.length > 0) {
+                    setGeneratedPaths(data.roles);
+
+                    const topRole = data.roles[0].name;
+                    setIsGeneratingIdentity(true);
+                    try {
+                        const explainRes = await fetch(`${API_BASE}/api/career/explain`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                career_path: topRole,
+                                subject: nextFormData.subject,
+                                skills: nextFormData.skills,
+                                interests: nextFormData.interests,
+                                role: nextFormData.role,
+                                projects: nextFormData.projects,
+                                clubs: nextFormData.clubs,
+                                ambitions: nextFormData.ambitions,
+                                work_preferences: nextFormData.work_preferences
+                            })
+                        });
+                        const explainData = await explainRes.json();
+                        if (explainData) {
+                            setIdentityStatement(explainData.identity_statement || '');
+                            setPathDetails(explainData);
+                        }
+                    } catch (explainErr) {
+                        console.error("Explain top role failed:", explainErr);
+                    } finally {
+                        setIsGeneratingIdentity(false);
+                    }
+                }
+            }
         } catch (err) {
-            try { console.error("Analysis failed:", err instanceof Error ? err.message : String(err)); } catch (_) {}
+            console.error("Analysis failed:", err);
+            setGeneratedPaths(DEFAULT_PATHS);
+            setIdentityStatement("As a motivated professional, I strive to achieve technical excellence and solve critical challenges.");
         } finally {
             setIsAnalyzing(false);
             setStep(3);
         }
     };
 
-
-
-    useEffect(() => {
-        if (activeTab === 'Paths' && generatedPaths.length === 0 && !isGeneratingPaths && step >= 3) {
-            fetchPaths();
-        }
-    }, [activeTab, generatedPaths.length, isGeneratingPaths, fetchPaths, step]);
-
     const handlePathClick = useCallback(async (path: any) => {
         if (isGeneratingRoadmap) return;
         setSelectedPath(path);
         setIsGeneratingRoadmap(true);
         setRoadmapData(null);
-        
+
         try {
             const res = await fetch(`${API_BASE}/api/career/roadmap`, {
                 method: 'POST',
@@ -1425,7 +1277,7 @@ const CareerOnboarding: React.FC = () => {
                 setRoadmapData(FALLBACK_ROADMAP);
             }
         } catch (err) {
-            try { console.error("Roadmap generation failed:", err instanceof Error ? err.message : String(err)); } catch (_) {}
+            try { console.error("Roadmap generation failed:", err instanceof Error ? err.message : String(err)); } catch (_) { }
             setRoadmapData(FALLBACK_ROADMAP);
         } finally {
             setIsGeneratingRoadmap(false);
@@ -1439,11 +1291,11 @@ const CareerOnboarding: React.FC = () => {
         setShowDetailedPage(true);
         setRecommendedCourses([]);
         setCarouselIndex(0); // reset carousel for new path
-        
+
         // Pre-fetch roadmap timeline and course list in the background
         handlePathClick(path);
         fetchCourses(path.name);
-        
+
         try {
             const res = await fetch(`${API_BASE}/api/career/path-details`, {
                 method: 'POST',
@@ -1453,13 +1305,19 @@ const CareerOnboarding: React.FC = () => {
                     subject: formData.subject,
                     skills: formData.skills,
                     role: formData.role,
-                    interests: formData.interests
+                    interests: formData.interests,
+                    projects: formData.projects,
+                    clubs: formData.clubs,
+                    ambitions: formData.ambitions,
+                    work_preferences: formData.work_preferences
                 })
             });
             const data = await res.json();
-            setPathDetails(data);
+            if (data) {
+                setPathDetails(data);
+            }
         } catch (err) {
-            try { console.error("Details fetch failed:", err instanceof Error ? err.message : String(err)); } catch (_) {}
+            try { console.error("Details fetch failed:", err instanceof Error ? err.message : String(err)); } catch (_) { }
             setPathDetails({
                 description: `A ${path.name} is a highly specialized expert responsible for designing, deploying, and optimizing critical industrial and technical solutions.`,
                 avg_salary: "$118,000",
@@ -1471,6 +1329,11 @@ const CareerOnboarding: React.FC = () => {
                     "Integrate physical sensors, cloud platforms, and NoSQL databases into local subsystems.",
                     "Perform routine quality assurance checks, diagnostics, and high-fidelity code reviews.",
                     "Collaborate with multi-disciplinary stakeholders to align technical blueprints with market value."
+                ],
+                requirements: [
+                    `Proficiency in core engineering, scripting, and system design tools relevant to ${path.name}.`,
+                    "Strong analytical logic, mathematical reasoning, and problem-solving fundamentals.",
+                    "Familiarity with industry-grade software design lifecycles, database structures, or automation systems."
                 ]
             });
         } finally {
@@ -1504,14 +1367,14 @@ const CareerOnboarding: React.FC = () => {
                     className={`relative z-10 flex-1 h-10 rounded-full flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors duration-500 ${activeTab === 'Identity' ? 'text-[#111]' : 'text-gray-400'}`}
                 >
                     {activeTab === 'Identity' && (
-                        <motion.div 
-                            layoutId="activeTab" 
-                            className="absolute inset-0 bg-white shadow-sm rounded-full border border-gray-100/50" 
+                        <motion.div
+                            layoutId="activeTab"
+                            className="absolute inset-0 bg-white shadow-sm rounded-full border border-gray-100/50"
                             transition={{ type: 'spring', duration: 0.6 }}
                         />
                     )}
                     <span className="relative z-20 flex items-center gap-2">
-                        <Edit3 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Identity</span>
+                        <span className="hidden sm:inline">Identity</span>
                     </span>
                 </button>
                 <button
@@ -1519,14 +1382,14 @@ const CareerOnboarding: React.FC = () => {
                     className={`relative z-10 flex-1 h-10 rounded-full flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest transition-colors duration-500 ${activeTab === 'Paths' ? 'text-[#111]' : 'text-gray-400'}`}
                 >
                     {activeTab === 'Paths' && (
-                        <motion.div 
-                            layoutId="activeTab" 
-                            className="absolute inset-0 bg-white shadow-sm rounded-full border border-gray-100/50" 
+                        <motion.div
+                            layoutId="activeTab"
+                            className="absolute inset-0 bg-white shadow-sm rounded-full border border-gray-100/50"
                             transition={{ type: 'spring', duration: 0.6 }}
                         />
                     )}
                     <span className="relative z-20 flex items-center gap-2">
-                        <Network className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Explore</span>
+                        <span className="hidden sm:inline">Explore</span>
                     </span>
                 </button>
             </div>
@@ -1543,9 +1406,9 @@ const CareerOnboarding: React.FC = () => {
             const isValid = wordCount > 0 && wordCount <= 5 && charCount <= 50;
 
             return (
-                <motion.div 
-                    initial={{ opacity: 0, y: 10 }} 
-                    animate={{ opacity: 1, y: 0 }} 
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     className="w-full max-w-2xl bg-white/90 backdrop-blur-xl rounded-[2.5rem] p-8 sm:p-12 border border-slate-100/80 shadow-[0_24px_80px_rgba(0,0,0,0.04)] relative overflow-hidden flex flex-col gap-8"
                 >
@@ -1572,7 +1435,7 @@ const CareerOnboarding: React.FC = () => {
                             animate={{ rotate: [0, 18, -10, 18, -10, 12, 0] }}
                             transition={{ duration: 1.2, ease: "easeInOut" }}
                         >
-                            👋
+
                         </motion.span>
                         <h1 className="text-lg sm:text-xl font-semibold text-slate-700 flex flex-wrap gap-x-[6px] leading-snug">
                             {titleWords.map((word, idx) => (
@@ -1626,8 +1489,8 @@ const CareerOnboarding: React.FC = () => {
                                     }
                                 }}
                                 placeholder="Type your role here…"
-                                className="w-full text-3xl sm:text-4xl font-light text-slate-900 border-b-2 border-gray-200 focus:border-blue-500 outline-none pb-3 pt-1 bg-transparent transition-all placeholder:text-slate-200"
-                                style={{ caretColor: '#1A73E8' }}
+                                className="w-full text-3xl sm:text-4xl font-light text-slate-900 border-b-2 border-gray-200 focus:border-[#7C3AED] outline-none pb-3 pt-1 bg-transparent transition-all placeholder:text-slate-200"
+                                style={{ caretColor: '#7C3AED' }}
                             />
                         </div>
 
@@ -1647,17 +1510,16 @@ const CareerOnboarding: React.FC = () => {
                         </div>
                     </div>
 
-                    <button 
+                    <button
                         onClick={() => {
                             const isStudent = formData.role.toLowerCase().includes('student');
                             setStep(isStudent ? 2 : 21);
-                        }} 
+                        }}
                         disabled={!isValid}
-                        className={`w-full sm:w-fit px-12 py-4 rounded-2xl font-semibold text-base transition-all select-none ${
-                            isValid 
-                            ? "bg-[#1B66EC] text-white hover:bg-blue-700 shadow-lg shadow-blue-200/50 active:scale-95 cursor-pointer" 
-                            : "bg-[#D2E3FC] text-white cursor-not-allowed"
-                        }`}
+                        className={`w-full sm:w-fit px-12 py-4 rounded-2xl font-semibold text-base transition-all select-none ${isValid
+                                ? "bg-[#7C3AED] text-white hover:bg-[#6D28D9] shadow-lg shadow-purple-100 active:scale-95 cursor-pointer"
+                                : "bg-purple-100 text-purple-300 text-white cursor-not-allowed"
+                            }`}
                     >
                         Next →
                     </button>
@@ -1667,9 +1529,9 @@ const CareerOnboarding: React.FC = () => {
 
         if (step === 21) {
             return (
-                <motion.div 
-                    initial={{ opacity: 0, y: 10 }} 
-                    animate={{ opacity: 1, y: 0 }} 
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     className="flex flex-col gap-10 w-full max-w-2xl px-6"
                 >
@@ -1689,22 +1551,22 @@ const CareerOnboarding: React.FC = () => {
                             value={organization}
                             onChange={(e) => setOrganization(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && setStep(22)}
-                            className="w-full text-3xl sm:text-4xl font-light text-slate-900 border-b-2 border-gray-200 focus:border-blue-500 outline-none pb-3 pt-1 bg-transparent transition-all placeholder:text-slate-300"
-                            style={{ caretColor: '#1A73E8' }}
+                            className="w-full text-3xl sm:text-4xl font-light text-slate-900 border-b-2 border-gray-200 focus:border-[#7C3AED] outline-none pb-3 pt-1 bg-transparent transition-all placeholder:text-slate-300"
+                            style={{ caretColor: '#7C3AED' }}
                         />
                     </div>
 
                     {/* Navigation Buttons */}
                     <div className="flex gap-4">
-                        <button 
+                        <button
                             onClick={() => setStep(1)}
-                            className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-blue-600 active:scale-95 cursor-pointer bg-white"
+                            className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-[#7C3AED] active:scale-95 cursor-pointer bg-white"
                         >
                             Back
                         </button>
-                        <button 
+                        <button
                             onClick={() => setStep(22)}
-                            className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none bg-[#1B66EC] text-white hover:bg-blue-700 shadow-lg shadow-blue-200/50 active:scale-95 cursor-pointer"
+                            className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none bg-[#7C3AED] text-white hover:bg-[#6D28D9] shadow-lg shadow-purple-100 active:scale-95 cursor-pointer"
                         >
                             Next
                         </button>
@@ -1727,17 +1589,17 @@ const CareerOnboarding: React.FC = () => {
             };
 
             const toggleTask = (task: string) => {
-                setSelectedTasks(prev => 
-                    prev.includes(task) 
-                        ? prev.filter(t => t !== task) 
+                setSelectedTasks(prev =>
+                    prev.includes(task)
+                        ? prev.filter(t => t !== task)
                         : [...prev, task]
                 );
             };
 
             return (
-                <motion.div 
-                    initial={{ opacity: 0, y: 10 }} 
-                    animate={{ opacity: 1, y: 0 }} 
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     className="flex flex-col gap-6 w-full max-w-3xl px-6"
                 >
@@ -1753,23 +1615,23 @@ const CareerOnboarding: React.FC = () => {
 
                     {/* Action buttons */}
                     <div className="flex gap-4 items-center">
-                        <button 
+                        <button
                             onClick={() => {
                                 alert("Re-shuffled roles and responsibilities!");
                             }}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
                         >
-                            <Sparkles className="w-3.5 h-3.5 text-blue-500" /> Re-generate
+                            <span className="font-semibold text-slate-500">↻</span> Re-generate
                         </button>
-                        <button 
+                        <button
                             onClick={toggleSelectAllTasks}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
                         >
-                            <input 
-                                type="checkbox" 
-                                checked={isAllSelected} 
+                            <input
+                                type="checkbox"
+                                checked={isAllSelected}
                                 onChange={toggleSelectAllTasks}
-                                className="w-3.5 h-3.5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                className="w-3.5 h-3.5 rounded border-gray-300 text-[#7C3AED] focus:ring-blue-500 cursor-pointer"
                             />
                             <span>Select all</span>
                         </button>
@@ -1786,17 +1648,15 @@ const CareerOnboarding: React.FC = () => {
                                     animate={{ opacity: 1, x: 0 }}
                                     transition={{ delay: idx * 0.05 }}
                                     onClick={() => toggleTask(task)}
-                                    className={`p-4 rounded-2xl border transition-all cursor-pointer select-none text-left flex items-start gap-3 hover:shadow-md ${
-                                        isSelected
-                                            ? 'bg-blue-50/80 border-blue-500 text-slate-800 font-medium'
+                                    className={`p-4 rounded-2xl border transition-all cursor-pointer select-none text-left flex items-start gap-3 hover:shadow-md ${isSelected
+                                            ? 'bg-purple-50/80 border-blue-500 text-slate-800 font-medium'
                                             : 'bg-[#F1F3F4]/60 border-slate-100 hover:bg-white text-slate-600'
-                                    }`}
+                                        }`}
                                 >
-                                    <div className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center border mt-0.5 ${
-                                        isSelected 
-                                            ? 'bg-blue-500 border-blue-500 text-white' 
+                                    <div className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center border mt-0.5 ${isSelected
+                                            ? 'bg-purple-500 border-blue-500 text-white'
                                             : 'bg-white border-slate-300'
-                                    }`}>
+                                        }`}>
                                         {isSelected && <span className="text-[10px]">✓</span>}
                                     </div>
                                     <span className="text-sm sm:text-base leading-relaxed">{task}</span>
@@ -1811,15 +1671,15 @@ const CareerOnboarding: React.FC = () => {
                             {selectedTasks.length} task{selectedTasks.length !== 1 && 's'} selected
                         </span>
                         <div className="flex gap-4">
-                            <button 
+                            <button
                                 onClick={() => setStep(21)}
-                                className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-blue-600 active:scale-95 cursor-pointer bg-white"
+                                className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-[#7C3AED] active:scale-95 cursor-pointer bg-white"
                             >
                                 Back
                             </button>
-                            <button 
+                            <button
                                 onClick={() => setStep(23)}
-                                className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none bg-[#1B66EC] text-white hover:bg-blue-700 shadow-lg shadow-blue-200/50 active:scale-95 cursor-pointer"
+                                className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none bg-[#7C3AED] text-white hover:bg-[#6D28D9] shadow-lg shadow-purple-100 active:scale-95 cursor-pointer"
                             >
                                 Next
                             </button>
@@ -1859,9 +1719,9 @@ const CareerOnboarding: React.FC = () => {
             };
 
             return (
-                <motion.div 
-                    initial={{ opacity: 0, y: 10 }} 
-                    animate={{ opacity: 1, y: 0 }} 
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     className="flex flex-col gap-6 w-full max-w-2xl px-6"
                 >
@@ -1873,11 +1733,11 @@ const CareerOnboarding: React.FC = () => {
 
                         {/* Selected Tasks Popover Trigger */}
                         <div className="relative inline-block">
-                            <button 
+                            <button
                                 onClick={() => setShowTasksPopover(!showTasksPopover)}
                                 className="flex items-center gap-1.5 px-3 py-1 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-full text-xs font-semibold tracking-wide transition-all shadow-sm active:scale-95"
                             >
-                                💼 {selectedTasks.length} task{selectedTasks.length !== 1 && 's'} <ChevronDown className={`w-3 h-3 transition-transform ${showTasksPopover ? 'rotate-180' : ''}`} />
+                                {selectedTasks.length} task{selectedTasks.length !== 1 && 's'} <span className="text-[9px] text-slate-400 select-none ml-1">{showTasksPopover ? '▲' : '▼'}</span>
                             </button>
 
                             {/* Selected Tasks Popover */}
@@ -1912,21 +1772,21 @@ const CareerOnboarding: React.FC = () => {
 
                     {/* Action buttons */}
                     <div className="flex gap-4 items-center">
-                        <button 
+                        <button
                             onClick={() => {
                                 alert("Re-shuffled roles and responsibilities!");
                             }}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
                         >
-                            <Sparkles className="w-3.5 h-3.5 text-[#7C3AED]" /> Re-generate
+                            <span className="font-semibold text-[#7C3AED]">↻</span> Re-generate
                         </button>
-                        <button 
+                        <button
                             onClick={toggleSelectAllSkills}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all active:scale-95"
                         >
-                            <input 
-                                type="checkbox" 
-                                checked={isAllSelected} 
+                            <input
+                                type="checkbox"
+                                checked={isAllSelected}
                                 onChange={toggleSelectAllSkills}
                                 className="w-3.5 h-3.5 rounded border-gray-300 text-[#7C3AED] focus:ring-[#7C3AED] cursor-pointer"
                             />
@@ -1954,11 +1814,10 @@ const CareerOnboarding: React.FC = () => {
                                                     : [...prev.skills, skill.name]
                                             }));
                                         }}
-                                        className={`px-4 py-2 rounded-full text-sm font-medium border transition-all select-none ${
-                                            isSelected
+                                        className={`px-4 py-2 rounded-full text-sm font-medium border transition-all select-none ${isSelected
                                                 ? 'bg-[#7C3AED] text-white border-[#7C3AED] shadow-md shadow-purple-200'
                                                 : 'bg-white text-slate-600 border-slate-200 hover:border-[#7C3AED]/50 hover:text-[#7C3AED]'
-                                        }`}
+                                            }`}
                                     >
                                         {isSelected && <span className="mr-1">✓</span>}
                                         {skill.name}
@@ -2000,7 +1859,7 @@ const CareerOnboarding: React.FC = () => {
                             onClick={addCustomSkill}
                             className="px-4 py-2 rounded-full text-sm font-semibold border border-dashed border-[#7C3AED]/40 text-[#7C3AED] bg-[#7C3AED]/5 hover:bg-[#7C3AED]/10 hover:border-[#7C3AED]/80 transition-all select-none flex items-center gap-1"
                         >
-                            More skills... <Plus className="w-3.5 h-3.5" />
+                            More skills... <span className="font-bold">+</span>
                         </button>
                     </div>
 
@@ -2011,20 +1870,19 @@ const CareerOnboarding: React.FC = () => {
                             {selectedSkills.length >= 3 && <span className="text-green-500 font-semibold ml-1">✓ Good to go!</span>}
                         </span>
                         <div className="flex gap-4">
-                            <button 
+                            <button
                                 onClick={() => setStep(22)}
-                                className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-blue-600 active:scale-95 cursor-pointer bg-white"
+                                className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-[#7C3AED] active:scale-95 cursor-pointer bg-white"
                             >
                                 Back
                             </button>
-                            <button 
-                                onClick={handleAnalyze} 
+                            <button
+                                onClick={() => setStep(26)}
                                 disabled={!isSkillValid}
-                                className={`px-8 py-3 rounded-2xl font-semibold text-base transition-all flex items-center gap-2 ${
-                                    isSkillValid 
-                                    ? 'bg-[#1B66EC] text-white hover:bg-blue-700 shadow-lg shadow-blue-200/50 active:scale-95 cursor-pointer' 
-                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                }`}
+                                className={`px-8 py-3 rounded-2xl font-semibold text-base transition-all flex items-center gap-2 ${isSkillValid
+                                        ? 'bg-[#7C3AED] text-white hover:bg-[#6D28D9] shadow-lg shadow-purple-100 active:scale-95 cursor-pointer'
+                                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                    }`}
                             >
                                 Next
                             </button>
@@ -2039,9 +1897,9 @@ const CareerOnboarding: React.FC = () => {
             const isStep2Valid = step2SubjectWords.length > 0;
 
             return (
-                <motion.div 
-                    initial={{ opacity: 0, y: 10 }} 
-                    animate={{ opacity: 1, y: 0 }} 
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     className="flex flex-col gap-8 w-full max-w-2xl px-6"
                 >
@@ -2053,12 +1911,12 @@ const CareerOnboarding: React.FC = () => {
                         className="space-y-3"
                     >
                         <div className="flex items-center gap-2">
-                            <span className="text-lg select-none">👋</span>
+                            <span className="text-lg select-none"></span>
                             <span className="text-sm text-slate-400 font-medium">To start, share a current or previous role:</span>
                         </div>
                         <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-sm shrink-0">U</div>
-                            <div className="inline-flex items-center px-5 py-2.5 bg-blue-50 border border-blue-100 rounded-2xl rounded-tl-sm shadow-sm">
+                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center text-[#7C3AED] font-bold text-sm shrink-0">U</div>
+                            <div className="inline-flex items-center px-5 py-2.5 bg-purple-50 border border-purple-100 rounded-2xl rounded-tl-sm shadow-sm">
                                 <span className="text-slate-800 font-semibold text-base">{formData.role}</span>
                             </div>
                         </div>
@@ -2073,11 +1931,11 @@ const CareerOnboarding: React.FC = () => {
                         className="space-y-2"
                     >
                         <div className="flex items-center gap-2">
-                            <button 
-                                onClick={() => setStep(1)} 
+                            <button
+                                onClick={() => setStep(1)}
                                 className="flex items-center gap-1 text-slate-400 hover:text-slate-700 transition-colors text-xs font-semibold uppercase tracking-widest"
                             >
-                                <ChevronLeft className="w-3.5 h-3.5" /> Back
+                                <span className="font-bold">←</span> Back
                             </button>
                         </div>
                         <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 leading-snug">
@@ -2124,13 +1982,11 @@ const CareerOnboarding: React.FC = () => {
                                         animate={{ opacity: 1, scale: 1 }}
                                         transition={{ delay: 0.45 + idx * 0.04 }}
                                         onClick={() => setFormData({ ...formData, subject: area.label })}
-                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${
-                                            isActive
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-all ${isActive
                                                 ? 'bg-[#7C3AED] text-white border-[#7C3AED] shadow-lg shadow-purple-200'
                                                 : 'bg-white text-slate-600 border-slate-200 hover:border-[#7C3AED] hover:text-[#7C3AED] hover:shadow-sm'
-                                        }`}
+                                            }`}
                                     >
-                                        <span>{area.icon}</span>
                                         <span>{area.label}</span>
                                     </motion.button>
                                 );
@@ -2138,17 +1994,16 @@ const CareerOnboarding: React.FC = () => {
                         </div>
                     </motion.div>
 
-                    <motion.button 
+                    <motion.button
                         initial={{ opacity: 0, y: 6 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: 0.9 }}
                         onClick={() => setStep(25)}
                         disabled={!isStep2Valid}
-                        className={`w-full sm:w-fit px-12 py-4 rounded-2xl font-semibold text-base transition-all flex items-center justify-center gap-3 ${
-                            isStep2Valid 
-                            ? 'bg-[#7C3AED] text-white hover:bg-purple-700 active:scale-95 cursor-pointer shadow-lg shadow-purple-200/50' 
-                            : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
-                        }`}
+                        className={`w-full sm:w-fit px-12 py-4 rounded-2xl font-semibold text-base transition-all flex items-center justify-center gap-3 ${isStep2Valid
+                                ? 'bg-[#7C3AED] text-white hover:bg-purple-700 active:scale-95 cursor-pointer shadow-lg shadow-purple-200/50'
+                                : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                            }`}
                     >
                         Next — Pick Your Skills →
                     </motion.button>
@@ -2164,9 +2019,9 @@ const CareerOnboarding: React.FC = () => {
             const isSkillValid = selectedSkills.length >= 3;
 
             return (
-                <motion.div 
-                    initial={{ opacity: 0, y: 10 }} 
-                    animate={{ opacity: 1, y: 0 }} 
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -10 }}
                     className="flex flex-col gap-8 w-full max-w-2xl px-6"
                 >
@@ -2179,13 +2034,13 @@ const CareerOnboarding: React.FC = () => {
                     >
                         {/* Role echo */}
                         <div className="flex items-center gap-2">
-                            <span className="text-sm select-none">👋</span>
+                            <span className="text-sm select-none"></span>
                             <span className="text-xs text-slate-400 font-medium">Role:</span>
-                            <span className="text-xs font-semibold text-slate-600 bg-blue-50 border border-blue-100 px-3 py-0.5 rounded-full">{formData.role}</span>
+                            <span className="text-xs font-semibold text-slate-600 bg-purple-50 border border-purple-100 px-3 py-0.5 rounded-full">{formData.role}</span>
                         </div>
                         {/* Subject echo */}
                         <div className="flex items-center gap-2">
-                            <span className="text-sm select-none">📚</span>
+                            <span className="text-sm select-none"></span>
                             <span className="text-xs text-slate-400 font-medium">Field:</span>
                             <span className="text-xs font-semibold text-slate-600 bg-purple-50 border border-purple-100 px-3 py-0.5 rounded-full">{formData.subject}</span>
                         </div>
@@ -2200,18 +2055,18 @@ const CareerOnboarding: React.FC = () => {
                         className="space-y-2"
                     >
                         <div className="flex items-center gap-2">
-                            <button 
-                                onClick={() => setStep(2)} 
+                            <button
+                                onClick={() => setStep(2)}
                                 className="flex items-center gap-1 text-slate-400 hover:text-slate-700 transition-colors text-xs font-semibold uppercase tracking-widest"
                             >
-                                <ChevronLeft className="w-3.5 h-3.5" /> Back
+                                <span className="font-bold">←</span> Back
                             </button>
                         </div>
                         <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">
                             Select your <span className="text-[#7C3AED]">skills</span>
                         </h1>
                         <p className="text-slate-400 text-sm">
-                            Pick at least <span className="font-semibold text-slate-600">3 skills</span> that apply to you. 
+                            Pick at least <span className="font-semibold text-slate-600">3 skills</span> that apply to you.
                             Hover any skill to learn more.
                         </p>
                     </motion.div>
@@ -2241,11 +2096,10 @@ const CareerOnboarding: React.FC = () => {
                                                     : [...prev.skills, skill.name]
                                             }));
                                         }}
-                                        className={`px-4 py-2 rounded-full text-sm font-medium border transition-all select-none ${
-                                            isSelected
+                                        className={`px-4 py-2 rounded-full text-sm font-medium border transition-all select-none ${isSelected
                                                 ? 'bg-[#7C3AED] text-white border-[#7C3AED] shadow-md shadow-purple-200'
                                                 : 'bg-white text-slate-600 border-slate-200 hover:border-[#7C3AED]/50 hover:text-[#7C3AED]'
-                                        }`}
+                                            }`}
                                     >
                                         {isSelected && <span className="mr-1">✓</span>}
                                         {skill.name}
@@ -2297,18 +2151,135 @@ const CareerOnboarding: React.FC = () => {
                             {selectedSkills.length} selected{selectedSkills.length < 3 && ` — pick ${3 - selectedSkills.length} more`}
                             {selectedSkills.length >= 3 && <span className="text-green-500 font-semibold ml-1">✓ Good to go!</span>}
                         </span>
-                        <button 
-                            onClick={handleAnalyze} 
+                        <button
+                            onClick={() => setStep(26)}
                             disabled={!isSkillValid}
-                            className={`px-10 py-4 rounded-2xl font-semibold text-base transition-all flex items-center gap-3 ${
-                                isSkillValid 
-                                ? 'bg-[#7C3AED] text-white hover:bg-purple-700 active:scale-95 cursor-pointer shadow-lg shadow-purple-200/50' 
-                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                            }`}
+                            className={`px-10 py-4 rounded-2xl font-semibold text-base transition-all flex items-center gap-3 ${isSkillValid
+                                    ? 'bg-[#7C3AED] text-white hover:bg-purple-700 active:scale-95 cursor-pointer shadow-lg shadow-purple-200/50'
+                                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                }`}
                         >
-                            Analyze Career <Rocket className="w-4 h-4" />
+                            Next <span className="font-bold">→</span>
                         </button>
                     </motion.div>
+                </motion.div>
+            );
+        }
+
+        if (step === 26) {
+            const ambitionsOptions = [
+                "Building products from scratch (0 to 1)",
+                "Scaling systems & optimizing performance",
+                "Solving complex algorithmic/mathematical problems",
+                "Leading teams & organizing events",
+                "Designing clean, beautiful user experiences",
+                "Researching & developing machine learning models",
+                "Managing business operations & strategy"
+            ];
+
+            const prefOptions = [
+                "Remote preferred",
+                "Hybrid setup",
+                "On-site office role",
+                "Team-centric collaboration",
+                "Independent solo execution"
+            ];
+
+            return (
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="flex flex-col gap-6 w-full max-w-2xl px-6 py-4"
+                >
+                    <div className="space-y-2">
+                        <h1 className="text-3xl font-bold text-slate-800 tracking-tight">
+                            A few <span className="text-[#7C3AED]">extra details</span> (Optional)
+                        </h1>
+                        <p className="text-slate-400 text-sm">
+                            These help our hybrid intelligence engine infer transferable skills and compute precise role matches.
+                        </p>
+                    </div>
+
+                    {/* Projects Input */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Key Projects</label>
+                        <textarea
+                            placeholder="e.g. Built an e-commerce website with React, Developed an automated web scraper in Python..."
+                            value={formData.projects}
+                            onChange={(e) => setFormData({ ...formData, projects: e.target.value })}
+                            className="w-full min-h-[80px] p-4 text-sm text-slate-800 border border-slate-200 rounded-2xl focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] outline-none transition-all resize-none bg-white shadow-sm"
+                        />
+                    </div>
+
+                    {/* Clubs/Activities Input */}
+                    <div className="space-y-2">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Clubs & Activities</label>
+                        <input
+                            type="text"
+                            placeholder="e.g. Robotics Club coordinator, President of MBA marketing club..."
+                            value={formData.clubs}
+                            onChange={(e) => setFormData({ ...formData, clubs: e.target.value })}
+                            className="w-full p-4 text-sm text-slate-800 border border-slate-200 rounded-2xl focus:border-[#7C3AED] focus:ring-1 focus:ring-[#7C3AED] outline-none transition-all bg-white shadow-sm"
+                        />
+                    </div>
+
+                    <div className="grid sm:grid-cols-2 gap-4">
+                        {/* Ambitions Input */}
+                        <div className="space-y-2 text-left">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Work Ambition</label>
+                            <div className="relative">
+                                <select
+                                    value={formData.ambitions}
+                                    onChange={(e) => setFormData({ ...formData, ambitions: e.target.value })}
+                                    className="w-full p-4 text-sm text-slate-800 border border-slate-200 rounded-2xl focus:border-[#7C3AED] outline-none bg-white shadow-sm appearance-none cursor-pointer"
+                                >
+                                    <option value="">What kind of work excites you?</option>
+                                    {ambitionsOptions.map((opt, i) => (
+                                        <option key={i} value={opt}>{opt}</option>
+                                    ))}
+                                </select>
+                                <span className="text-[10px] text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none select-none">▼</span>
+                            </div>
+                        </div>
+
+                        {/* Work Preferences Input */}
+                        <div className="space-y-2 text-left">
+                            <label className="text-xs font-bold text-slate-500 uppercase tracking-widest">Work Setting</label>
+                            <div className="relative">
+                                <select
+                                    value={formData.work_preferences}
+                                    onChange={(e) => setFormData({ ...formData, work_preferences: e.target.value })}
+                                    className="w-full p-4 text-sm text-slate-800 border border-slate-200 rounded-2xl focus:border-[#7C3AED] outline-none bg-white shadow-sm appearance-none cursor-pointer"
+                                >
+                                    <option value="">Preferred work setup?</option>
+                                    {prefOptions.map((opt, i) => (
+                                        <option key={i} value={opt}>{opt}</option>
+                                    ))}
+                                </select>
+                                <span className="text-[10px] text-slate-400 absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none select-none">▼</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Navigation buttons */}
+                    <div className="flex justify-between items-center mt-6">
+                        <button
+                            onClick={() => {
+                                const isStudent = formData.role.toLowerCase().includes('student');
+                                setStep(isStudent ? 25 : 23);
+                            }}
+                            className="px-8 py-3 rounded-2xl font-semibold text-base transition-all select-none border border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-[#7C3AED] active:scale-95 cursor-pointer bg-white"
+                        >
+                            Back
+                        </button>
+                        <button
+                            onClick={() => handleAnalyze(formData)}
+                            className="px-10 py-4 rounded-2xl font-semibold text-base bg-[#7C3AED] text-white hover:bg-purple-700 active:scale-95 cursor-pointer shadow-lg shadow-purple-200/50 flex items-center gap-3"
+                        >
+                            Analyze Career <span className="font-bold">→</span>
+                        </button>
+                    </div>
                 </motion.div>
             );
         }
@@ -2318,45 +2289,45 @@ const CareerOnboarding: React.FC = () => {
                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="w-full max-w-6xl mx-auto pt-28 pb-12 grid lg:grid-cols-[0.9fr_1.1fr] gap-12 px-6">
                     <div className="space-y-10">
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-slate-800 font-bold uppercase text-[11px] tracking-widest"><Briefcase className="w-4 h-4 text-blue-500" /> Experiences</div>
+                            <div className="flex items-center gap-2 text-slate-800 font-bold uppercase text-[11px] tracking-widest"> Experiences</div>
                             <div className="flex flex-wrap gap-2">
                                 {formData.experience.map((exp, i) => (
-                                    <div key={i} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-[#111] rounded-lg text-[11px] font-bold uppercase tracking-tight">{exp} <X className="w-3 h-3 cursor-pointer opacity-40 hover:opacity-100" onClick={() => removeExperience(i)} /></div>
+                                    <div key={i} className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-[#111] rounded-lg text-[11px] font-bold uppercase tracking-tight">{exp} <span className="text-sm font-light cursor-pointer opacity-40 hover:opacity-100 select-none ml-1.5" onClick={() => removeExperience(i)}>×</span></div>
                                 ))}
-                                <button onClick={addExperience} className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-400 rounded-lg text-[11px] font-bold border border-dashed border-gray-200 hover:border-gray-400 transition-all uppercase tracking-tight"><Plus className="w-3 h-3" /> Add experience</button>
+                                <button onClick={addExperience} className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-400 rounded-lg text-[11px] font-bold border border-dashed border-gray-200 hover:border-gray-400 transition-all uppercase tracking-tight"><span className="font-bold">+</span> Add experience</button>
                             </div>
                         </div>
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-slate-800 font-bold uppercase text-[11px] tracking-widest"><GraduationCap className="w-4 h-4 text-purple-500" /> Education</div>
+                            <div className="flex items-center gap-2 text-slate-800 font-bold uppercase text-[11px] tracking-widest"> Education</div>
                             <div className="flex gap-2 flex-wrap">
                                 {formData.subject ? (
-                                    <div className="flex items-center gap-2 px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-[11px] font-bold border border-blue-100 uppercase tracking-tight">
+                                    <div className="flex items-center gap-2 px-4 py-2 bg-purple-50 text-blue-700 rounded-lg text-[11px] font-bold border border-purple-100 uppercase tracking-tight">
                                         {formData.subject}
-                                        <X className="w-3 h-3 cursor-pointer opacity-40 hover:opacity-100" onClick={() => setFormData({...formData, subject: ''})} />
+                                        <span className="text-sm font-light cursor-pointer opacity-40 hover:opacity-100 select-none ml-1.5" onClick={() => setFormData({ ...formData, subject: '' })}>×</span>
                                     </div>
                                 ) : null}
-                                <button onClick={() => { const s = prompt("Update background:"); if(s) setFormData({...formData, subject: s}) }} className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-400 rounded-lg text-[11px] font-bold border border-dashed border-gray-200 hover:border-gray-400 transition-all uppercase tracking-tight"><Plus className="w-3 h-3" /> Add education</button>
+                                <button onClick={() => { const s = prompt("Update background:"); if (s) setFormData({ ...formData, subject: s }) }} className="flex items-center gap-2 px-4 py-2 bg-gray-50 text-gray-400 rounded-lg text-[11px] font-bold border border-dashed border-gray-200 hover:border-gray-400 transition-all uppercase tracking-tight"><span className="font-bold">+</span> Add education</button>
                             </div>
                         </div>
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-slate-800 font-bold uppercase text-[11px] tracking-widest"><Target className="w-4 h-4 text-green-500" /> Skills</div>
+                            <div className="flex items-center gap-2 text-slate-800 font-bold uppercase text-[11px] tracking-widest"> Skills</div>
                             <div className="flex flex-wrap gap-2">
                                 {formData.skills.map(s => (
-                                    <div key={s} className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg text-[11px] font-bold border border-green-100 uppercase tracking-tight">{s} <X className="w-3 h-3 cursor-pointer opacity-40" onClick={() => removeSkill(s)} /></div>
+                                    <div key={s} className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-lg text-[11px] font-bold border border-green-100 uppercase tracking-tight">{s} <span className="text-sm font-light cursor-pointer opacity-40 hover:opacity-100 select-none ml-1.5" onClick={() => removeSkill(s)}>×</span></div>
                                 ))}
-                                <button onClick={addSkill} className="px-4 py-2 bg-gray-50 text-gray-400 rounded-lg text-[11px] font-bold border border-dashed border-gray-200 hover:border-gray-400 transition-all uppercase tracking-tight"><Plus className="w-3 h-3" /> Add skills</button>
+                                <button onClick={addSkill} className="px-4 py-2 bg-gray-50 text-gray-400 rounded-lg text-[11px] font-bold border border-dashed border-gray-200 hover:border-gray-400 transition-all uppercase tracking-tight"><span className="font-bold">+</span> Add skills</button>
                             </div>
                         </div>
                         <div className="space-y-4">
-                            <div className="flex items-center gap-2 text-slate-800 font-bold uppercase text-[11px] tracking-widest"><Heart className="w-4 h-4 text-rose-500" /> Interests</div>
+                            <div className="flex items-center gap-2 text-slate-800 font-bold uppercase text-[11px] tracking-widest"> Interests</div>
                             <div className="flex flex-wrap gap-2">
                                 {formData.interests.map(interest => (
                                     <div key={interest} className="flex items-center gap-2 px-4 py-2 bg-pink-50 text-pink-700 rounded-lg text-[11px] font-bold border border-pink-100 uppercase tracking-tight">
                                         {interest}
-                                        <X className="w-3 h-3 cursor-pointer opacity-40 hover:opacity-100" onClick={() => setFormData({...formData, interests: formData.interests.filter(item => item !== interest)})} />
+                                        <span className="text-sm font-light cursor-pointer opacity-40 hover:opacity-100 select-none ml-1.5" onClick={() => setFormData({ ...formData, interests: formData.interests.filter(item => item !== interest) })}>×</span>
                                     </div>
                                 ))}
-                                <button onClick={() => { const interest = prompt("Enter an interest:"); if (interest) setFormData({...formData, interests: [...formData.interests, interest]}) }} className="px-4 py-2 bg-gray-50 text-gray-400 rounded-lg text-[11px] font-bold border border-dashed border-gray-200 hover:border-gray-400 transition-all uppercase tracking-tight"><Plus className="w-3 h-3" /> Add interests</button>
+                                <button onClick={() => { const interest = prompt("Enter an interest:"); if (interest) setFormData({ ...formData, interests: [...formData.interests, interest] }) }} className="px-4 py-2 bg-gray-50 text-gray-400 rounded-lg text-[11px] font-bold border border-dashed border-gray-200 hover:border-gray-400 transition-all uppercase tracking-tight"><span className="font-bold">+</span> Add interests</button>
                             </div>
                         </div>
                     </div>
@@ -2365,8 +2336,8 @@ const CareerOnboarding: React.FC = () => {
                         <AnimatePresence>
                             {isGeneratingIdentity && (
                                 <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-white/80 backdrop-blur-md z-30 flex flex-col items-center justify-center gap-4">
-                                    <div className="w-8 h-8 border-3 border-blue-100 border-t-blue-600 rounded-full animate-spin" />
-                                    <span className="text-blue-600 font-black uppercase text-[9px] tracking-widest italic">Syncing Profile...</span>
+                                    <div className="w-8 h-8 border-3 border-purple-100 border-t-blue-600 rounded-full animate-spin" />
+                                    <span className="text-[#7C3AED] font-black uppercase text-[9px] tracking-widest italic">Syncing Profile...</span>
                                 </motion.div>
                             )}
                         </AnimatePresence>
@@ -2374,13 +2345,13 @@ const CareerOnboarding: React.FC = () => {
                         <div>
                             <div className="flex justify-between items-start mb-10">
                                 <div className="flex items-center gap-2 text-[#34A853]">
-                                    <Sparkles className="w-4 h-4" />
+
                                     <span className="font-black text-[10px] uppercase tracking-widest">Identity Synthesis</span>
                                 </div>
                                 <span className="px-3 py-1 bg-gray-50 rounded-lg text-[9px] font-black text-gray-300 uppercase tracking-widest italic border border-gray-100">GROQ 2.0</span>
                             </div>
                             <AnimatePresence mode="wait">
-                                <motion.p 
+                                <motion.p
                                     key={identityStatement.substring(0, 30) || 'empty'}
                                     initial={{ opacity: 0, y: 5 }}
                                     animate={{ opacity: 1, y: 0 }}
@@ -2393,18 +2364,72 @@ const CareerOnboarding: React.FC = () => {
                         <div className="flex flex-col sm:flex-row justify-between items-center gap-6 mt-12 pb-2">
                             <div className="flex gap-3">
                                 <button onClick={async () => {
-                                    await Promise.all([
-                                        fetchIdentityDirect(formData),
-                                        fetchPathsDirect(formData)
-                                    ]);
-                                }} className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-all border border-gray-100 shadow-sm active:scale-95 hover:text-purple-600" title="Re-generate Identity and Paths"><RefreshCw className="w-4 h-4" /></button>
-                                <button onClick={() => { navigator.clipboard.writeText(identityStatement); alert('Copied!'); }} className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-all border border-gray-100"><Copy className="w-4 h-4" /></button>
+                                    await handleAnalyze(formData);
+                                }} className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-all border border-gray-100 shadow-sm active:scale-95 hover:text-purple-600" title="Re-generate Identity and Paths"><span className="font-semibold hover:rotate-180 transition-transform duration-500">↻</span></button>
+                                <button onClick={() => { navigator.clipboard.writeText(identityStatement); alert('Copied!'); }} className="w-10 h-10 bg-gray-50 rounded-xl flex items-center justify-center text-gray-400 hover:bg-gray-100 transition-all border border-gray-100"><span className="text-xs font-semibold">Copy</span></button>
                             </div>
+
+                            {/* Inferred Skill Vector Profile */}
+                            {Object.keys(skillVector).length > 0 && (
+                                <div className="w-full text-left space-y-4 border-t pt-8 mt-8">
+                                    <div className="flex items-center gap-2 text-slate-800 font-bold uppercase text-[11px] tracking-widest">
+                                        Skill Vector Profile
+                                    </div>
+                                    <div className="bg-slate-50/50 rounded-2xl p-6 border border-slate-100/50 space-y-4">
+                                        {Object.entries(skillVector)
+                                            .sort((a, b) => b[1] - a[1])
+                                            .slice(0, 5)
+                                            .map(([skill, val], i) => (
+                                                <div key={i} className="space-y-1.5">
+                                                    <div className="flex justify-between items-end text-xs font-semibold text-slate-700">
+                                                        <span className="capitalize">{skill.replace(/_/g, ' ')}</span>
+                                                        <span className="font-mono text-purple-600">{val}/10</span>
+                                                    </div>
+                                                    <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                        <motion.div
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: `${val * 10}%` }}
+                                                            transition={{ duration: 0.8, delay: i * 0.1 }}
+                                                            className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Transferable Skills Discovered */}
+                            {transferableSkills.length > 0 && (
+                                <div className="w-full text-left space-y-4 border-t pt-8 mt-8">
+                                    <div className="flex items-center gap-2 text-slate-800 font-bold uppercase text-[11px] tracking-widest">
+                                        Transferable Skill Inferences
+                                    </div>
+                                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                        {transferableSkills.map((inf, i) => (
+                                            <div key={i} className="p-4 bg-slate-50 border border-slate-100 rounded-2xl text-left space-y-2">
+                                                <div className="flex items-center gap-2 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                                    <span> {inf.source_field}</span>
+                                                </div>
+                                                <p className="text-xs text-slate-600 italic">"{inf.context}"</p>
+                                                <div className="flex flex-wrap gap-1.5 mt-1">
+                                                    {inf.inferred_skills.map((s: string) => (
+                                                        <span key={s} className="px-2 py-0.5 bg-purple-50 border border-purple-100 text-purple-600 rounded-full text-[9px] font-bold">
+                                                            {s}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             <button
                                 onClick={() => { setActiveTab('Paths'); setStep(4); }}
-                                className="w-full sm:w-auto px-10 py-4 bg-[#111] text-white rounded-xl font-black text-[11px] uppercase tracking-widest hover:bg-blue-600 transition-all shadow-lg active:scale-95 flex items-center gap-3"
+                                className="w-full sm:w-auto px-10 py-4 bg-[#111] text-white rounded-xl font-black text-[11px] uppercase tracking-widest hover:bg-[#7C3AED] transition-all shadow-lg active:scale-95 flex items-center gap-3 mt-6"
                             >
-                                Explore Paths <ArrowRight className="w-4 h-4" />
+                                Explore Paths <span className="font-bold">→</span>
                             </button>
                         </div>
                     </div>
@@ -2413,22 +2438,126 @@ const CareerOnboarding: React.FC = () => {
         }
 
         if (activeTab === 'Paths') {
+            const pathsToUse = generatedPaths.length > 0 ? generatedPaths : DEFAULT_PATHS;
             return (
-                <div className="w-full min-h-screen bg-white pt-24 sm:pt-28">
-                    <CareerNetwork 
-                        paths={generatedPaths.length > 0 ? generatedPaths : DEFAULT_PATHS} 
-                        onPathClick={handleLearnMore}
-                        isGenerating={isGeneratingPaths}
-                        formData={formData}
-                    />
+                <div className="w-full min-h-screen bg-slate-50/50 pt-24 sm:pt-28 pb-16">
+                    <div className="max-w-6xl mx-auto px-6">
+                        {/* Title & Subtitle */}
+                        <div className="text-center mb-12">
+                            <span className="text-xs font-bold text-[#7C3AED] uppercase tracking-[0.25em] mb-3 block">Match Results</span>
+                            <h1 className="text-3xl sm:text-5xl font-black text-slate-900 tracking-tight leading-none uppercase">
+                                Recommended <span className="bg-gradient-to-r from-[#7C3AED] to-[#6D28D9] bg-clip-text text-transparent">Career Paths</span>
+                            </h1>
+                            <p className="text-sm text-slate-500 font-medium mt-3 max-w-xl mx-auto">
+                                Sorted by matching score computed from your baseline credentials, explicit skills, and inferred transferable activities.
+                            </p>
+                        </div>
 
-                    <RoadmapSection 
-                        roadmapData={roadmapData} 
-                        selectedPath={selectedPath} 
-                        isGeneratingRoadmap={isGeneratingRoadmap} 
-                        handlePathClick={handlePathClick} 
-                        onDetails={setSelectedDetailMonth} 
-                        navigate={navigate} 
+                        {/* Ranked Cards Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
+                            {pathsToUse.map((path, idx) => {
+                                const matchPct = path.match_percentage || (95 - idx * 4);
+                                const salaryRange = path.salary ? `${path.salary.entry} - ${path.salary.senior}` : "$75k - $160k+";
+                                const demand = path.growth_potential || "High Growth";
+                                const strengths = path.matched_strengths || [];
+                                const gaps = path.skill_gaps || [];
+
+                                return (
+                                    <motion.div
+                                        key={idx}
+                                        initial={{ opacity: 0, y: 15 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.4, delay: idx * 0.05 }}
+                                        className="bg-white rounded-3xl border border-slate-100 shadow-[0_8px_30px_rgb(0,0,0,0.015)] hover:shadow-[0_20px_40px_rgba(0,0,0,0.04)] hover:border-purple-200/50 transition-all duration-300 flex flex-col justify-between overflow-hidden group relative"
+                                    >
+                                        <div className="absolute inset-0 bg-gradient-to-b from-purple-500/[0.01] to-blue-500/[0.01] opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+
+                                        {/* Card Header */}
+                                        <div className="p-6 pb-4 flex justify-between items-start gap-4">
+                                            <div className="space-y-1.5 text-left">
+                                                <span className="px-2.5 py-0.5 bg-slate-50 text-slate-500 border border-slate-100 rounded-full text-[9px] font-bold uppercase tracking-wider">
+                                                    {path.group || "Tech"}
+                                                </span>
+                                                <h3 className="text-lg font-bold text-slate-800 group-hover:text-[#7C3AED] transition-colors leading-snug tracking-tight">
+                                                    {path.name}
+                                                </h3>
+                                            </div>
+
+                                            <div className="px-3 py-1.5 rounded-2xl bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-100/50 flex flex-col items-center shrink-0">
+                                                <span className="text-xs font-black text-purple-600">{matchPct}%</span>
+                                                <span className="text-[7px] font-extrabold text-slate-400 uppercase tracking-widest leading-none mt-0.5">Match</span>
+                                            </div>
+                                        </div>
+
+                                        {/* Description */}
+                                        <div className="px-6 text-left">
+                                            <p className="text-xs text-slate-500 leading-relaxed font-medium line-clamp-2">
+                                                {path.description || path.desc || "Design, develop, and implement scalable software architectures..."}
+                                            </p>
+                                        </div>
+
+                                        {/* Highlights */}
+                                        <div className="px-6 py-4 space-y-3 border-t border-b border-slate-50 bg-slate-50/[0.15] text-left">
+                                            {strengths.length > 0 && (
+                                                <div className="space-y-1">
+                                                    <span className="text-[8px] font-black text-emerald-600 uppercase tracking-wider block">✓ Matched Strengths</span>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {strengths.slice(0, 3).map((s: any, i: number) => (
+                                                            <span key={i} className="px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded-md text-[9px] font-bold">
+                                                                {s.display_name || s}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {gaps.length > 0 && (
+                                                <div className="space-y-1">
+                                                    <span className="text-[8px] font-black text-amber-600 uppercase tracking-wider block">⚠ Top Gaps</span>
+                                                    <div className="flex flex-wrap gap-1">
+                                                        {gaps.slice(0, 3).map((g: any, i: number) => (
+                                                            <span key={i} className="px-2 py-0.5 bg-amber-50 text-amber-700 rounded-md text-[9px] font-bold">
+                                                                {g.display_name || g}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {path.why_matched && (
+                                                <div className="pt-1 text-[10px] text-slate-400 font-medium leading-relaxed border-t border-slate-50/50">
+                                                    "{path.why_matched}"
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Card Footer */}
+                                        <div className="p-6 pt-4 flex justify-between items-center bg-slate-50/[0.05]">
+                                            <div className="text-left space-y-0.5">
+                                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-wider block">Est. Salary</span>
+                                                <span className="text-[11px] font-bold text-slate-700">{salaryRange}</span>
+                                            </div>
+
+                                            <button
+                                                onClick={() => handleLearnMore(path)}
+                                                className="px-4 py-2 bg-slate-900 group-hover:bg-[#7C3AED] text-white rounded-xl text-xs font-bold transition-all duration-300 shadow-sm active:scale-95 flex items-center gap-1.5"
+                                            >
+                                                Learn More <span className="font-bold">→</span>
+                                            </button>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    <RoadmapSection
+                        roadmapData={roadmapData}
+                        selectedPath={selectedPath}
+                        isGeneratingRoadmap={isGeneratingRoadmap}
+                        handlePathClick={handlePathClick}
+                        onDetails={setSelectedDetailMonth}
+                        navigate={navigate}
                     />
                 </div>
             );
@@ -2459,12 +2588,12 @@ const CareerOnboarding: React.FC = () => {
                     </AnimatePresence>
                 )}
             </main>
-            
+
             <AnimatePresence>
                 {selectedDetailMonth && (
-                    <RoadmapDetailModal 
-                        month={selectedDetailMonth} 
-                        onClose={() => setSelectedDetailMonth(null)} 
+                    <RoadmapDetailModal
+                        month={selectedDetailMonth}
+                        onClose={() => setSelectedDetailMonth(null)}
                     />
                 )}
             </AnimatePresence>
@@ -2482,10 +2611,10 @@ const CareerOnboarding: React.FC = () => {
                         {/* Loading State Overlay */}
                         <AnimatePresence>
                             {isGeneratingDetails && (
-                                <motion.div 
-                                    initial={{ opacity: 0 }} 
-                                    animate={{ opacity: 1 }} 
-                                    exit={{ opacity: 0 }} 
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
                                     className="absolute inset-0 bg-[#F8F9FA]/90 backdrop-blur-md z-[1600] flex flex-col items-center justify-center gap-4"
                                 >
                                     <div className="relative w-16 h-16">
@@ -2499,61 +2628,61 @@ const CareerOnboarding: React.FC = () => {
 
                         {/* Top Header Bar */}
                         <div className="w-full max-w-6xl mx-auto px-6 py-6 flex items-center justify-between border-b border-slate-100 bg-white/40 backdrop-blur-md sticky top-0 z-[1400]">
-                            <button 
+                            <button
                                 onClick={() => setShowDetailedPage(false)}
                                 className="flex items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-50 transition-all font-bold text-xs shadow-sm active:scale-95 cursor-pointer"
                             >
-                                <ChevronLeft className="w-4 h-4 text-slate-400" /> Back to Network
+                                <span className="font-bold text-slate-400 mr-1">←</span> Back to Network
                             </button>
-                            <button 
+                            <button
                                 onClick={() => window.open("https://www.google.com/search?q=" + encodeURIComponent(`jobs near me ${selectedPath?.name}`), "_blank")}
-                                className="px-5 py-2.5 bg-[#1B66EC] text-white font-bold rounded-xl text-xs shadow-md hover:bg-blue-700 transition-all active:scale-95 cursor-pointer"
+                                className="px-5 py-2.5 bg-[#7C3AED] text-white font-bold rounded-xl text-xs shadow-md hover:bg-[#6D28D9] transition-all active:scale-95 cursor-pointer"
                             >
-                                Find jobs near you ↗
+                                Find jobs near you
                             </button>
                         </div>
 
                         {/* Section 1: Imagine yourself as (Landing screen with arrow) */}
                         <div className="w-full max-w-4xl mx-auto text-center py-20 px-6 flex flex-col items-center min-h-[85vh] justify-center relative">
                             <p className="text-[11px] font-extrabold text-slate-400 uppercase tracking-[0.25em] mb-4">Imagine yourself as:</p>
-                            
+
                             {/* Title styled with gorgeous blue/green gradient */}
                             <h1 className="text-4xl sm:text-6xl font-black tracking-tight mb-8">
-                                <span className="bg-gradient-to-r from-[#1B66EC] to-[#4AD66D] bg-clip-text text-transparent capitalize">
+                                <span className="bg-gradient-to-r from-[#7C3AED] to-[#6D28D9] bg-clip-text text-transparent capitalize">
                                     {selectedPath?.name}
                                 </span>
                             </h1>
-                            
+
                             <p className="text-slate-600 text-base sm:text-lg max-w-3xl leading-relaxed font-semibold mb-5">
                                 "{pathDetails?.description || "Synthesizing professional trajectory..."}"
                             </p>
-                            
+
                             <span className="text-[10px] font-bold text-slate-400 tracking-wider">Source: GROQ 2.0 AI Synthesis</span>
-                            
+
                             {/* Badges */}
                             <div className="flex gap-4 justify-center mt-12 flex-wrap">
                                 <div className="flex items-center gap-2 px-5 py-3 bg-white rounded-full border border-slate-100 shadow-sm text-xs font-bold text-slate-700">
-                                    <span className="text-green-500">💰</span> Avg. Salary: {pathDetails?.avg_salary || "$118,000"}
+                                    Avg. Salary: {pathDetails?.avg_salary || "$118,000"}
                                 </div>
                                 <div className="flex items-center gap-2 px-5 py-3 bg-white rounded-full border border-slate-100 shadow-sm text-xs font-bold text-slate-700">
-                                    <span className="text-blue-500">🎓</span> Typical Degree: {pathDetails?.typical_degree || "Bachelor's degree"}
+                                    Typical Degree: {pathDetails?.typical_degree || "Bachelor's degree"}
                                 </div>
                             </div>
-                            
+
                             <p className="text-[9px] text-slate-400 max-w-md mx-auto mt-8 font-medium">
                                 Salary information synthesized dynamically from live GROQ 2.0 data. This roadmap represents localized attributes and active competencies.
                             </p>
-                            
+
                             {/* Scroll down button */}
-                            <motion.button 
+                            <motion.button
                                 onClick={() => {
                                     document.getElementById("sweet-spots-section")?.scrollIntoView({ behavior: "smooth" });
                                 }}
-                                className="mt-16 w-12 h-12 rounded-full bg-[#1B66EC] hover:bg-blue-700 flex items-center justify-center text-white shadow-lg active:scale-90 transition-all pointer-events-auto cursor-pointer"
+                                className="mt-16 w-12 h-12 rounded-full bg-[#7C3AED] hover:bg-[#6D28D9] flex items-center justify-center text-white shadow-lg active:scale-90 transition-all pointer-events-auto cursor-pointer"
                                 animate={{ y: [0, 8, 0] }}
                                 transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
                             >
-                                <ChevronDown className="w-5 h-5" />
+                                <span className="text-sm">▼</span>
                             </motion.button>
                         </div>
 
@@ -2563,48 +2692,126 @@ const CareerOnboarding: React.FC = () => {
                                 <div className="flex items-center justify-between mb-16 flex-wrap gap-4">
                                     <div>
                                         <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
-                                            💪 Sweet spots
+                                            Sweet spots
                                         </h2>
                                         <p className="text-slate-500 text-sm font-medium mt-2">
                                             Consider how the role of a(n) <span className="text-slate-800 font-bold">{selectedPath?.name}</span> may overlap with where you are now.
                                         </p>
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={async () => {
                                             setIsGeneratingDetails(true);
                                             await handleLearnMore(selectedPath);
                                         }}
                                         className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all active:scale-95 shadow-sm cursor-pointer"
                                     >
-                                        <Sparkles className="w-3.5 h-3.5 text-blue-500" /> Re-generate
+                                        <span className="font-semibold text-slate-500">↻</span> Re-generate
                                     </button>
                                 </div>
-                                
+
                                 <div className="grid lg:grid-cols-[0.8fr_1.2fr] gap-12 items-start mt-8">
                                     {/* Left column: User selected skills */}
-                                    <div className="flex flex-col gap-3">
+                                    <div className="flex flex-col gap-3 text-left">
                                         <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-widest border-b pb-2 mb-2">Your Active Competencies (Click for insights)</span>
                                         {formData.skills.map((skill: string) => (
-                                            <button 
-                                                key={skill} 
+                                            <button
+                                                key={skill}
                                                 onClick={() => handleInsightClick('skill', skill)}
                                                 className="px-5 py-3.5 bg-slate-50 hover:bg-white border border-slate-100 hover:border-[#7C3AED]/30 rounded-2xl text-left text-sm font-bold text-slate-700 tracking-tight shadow-sm hover:shadow-md active:scale-98 transition-all duration-300 cursor-pointer flex justify-between items-center group w-full"
                                             >
                                                 <span>{skill}</span>
-                                                <Sparkles className="w-3.5 h-3.5 text-[#7C3AED] opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+
                                             </button>
                                         ))}
                                     </div>
-                                    
+
                                     {/* Right column: Customized green bordered card */}
-                                    <div className="bg-emerald-50/20 border-2 border-emerald-500/30 rounded-[2.5rem] p-8 sm:p-10 shadow-[0_15px_40px_rgba(16,185,129,0.04)] relative overflow-hidden">
+                                    <div className="bg-[#10B981]/5 border-2 border-[#10B981]/25 rounded-[2.5rem] p-8 sm:p-10 shadow-[0_15px_40px_rgba(16,185,129,0.04)] relative overflow-hidden text-left">
                                         <div className="absolute top-0 right-0 p-8 opacity-[0.03] pointer-events-none">
-                                            <Sparkles className="w-32 h-32 text-emerald-500" />
+
                                         </div>
                                         <h3 className="text-xs font-bold text-emerald-800 uppercase tracking-wider mb-4">Strategic Competency Match</h3>
                                         <p className="text-slate-600 text-sm sm:text-base leading-relaxed font-semibold">
                                             {pathDetails?.sweet_spot_explanation || "Analyzing profile alignment matrices..."}
                                         </p>
+                                    </div>
+                                </div>
+
+                                {/* Comparison Columns */}
+                                <div className="grid md:grid-cols-2 gap-8 mt-12 text-left">
+                                    {/* Strengths */}
+                                    <div className="bg-[#10B981]/5 border border-[#10B981]/20 rounded-[2rem] p-6 sm:p-8 flex flex-col gap-4">
+                                        <h3 className="text-sm font-black text-emerald-700 uppercase tracking-wider flex items-center gap-2 mb-2">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Matched Strengths ({selectedPath?.matched_strengths?.length || 0})
+                                        </h3>
+                                        {(selectedPath?.matched_strengths || []).length > 0 ? (
+                                            <div className="space-y-4">
+                                                {(selectedPath?.matched_strengths || []).map((str: any, i: number) => {
+                                                    const pct = Math.round((str.score / 10) * 100);
+                                                    return (
+                                                        <button
+                                                            key={i}
+                                                            onClick={() => handleInsightClick('skill', str.display_name)}
+                                                            className="p-4 bg-white border border-emerald-500/10 rounded-2xl flex flex-col gap-2 shadow-sm hover:shadow-md hover:border-emerald-500/30 transition-all text-left w-full cursor-pointer group"
+                                                        >
+                                                            <div className="flex justify-between items-center w-full">
+                                                                <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                                                    {str.display_name}
+
+                                                                </span>
+                                                                <span className="text-xs font-extrabold text-emerald-600">Your score: {str.score.toFixed(1)}/10</span>
+                                                            </div>
+                                                            <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                                <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
+                                                            </div>
+                                                            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">
+                                                                Role Importance: {str.importance.toFixed(1)}/10
+                                                            </p>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-slate-400 italic">No direct strength overlaps found. Keep learning!</p>
+                                        )}
+                                    </div>
+
+                                    {/* Gaps */}
+                                    <div className="bg-[#F59E0B]/5 border border-[#F59E0B]/20 rounded-[2rem] p-6 sm:p-8 flex flex-col gap-4">
+                                        <h3 className="text-sm font-black text-[#B45309] uppercase tracking-wider flex items-center gap-2 mb-2">
+                                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Key Skill Gaps ({selectedPath?.skill_gaps?.length || 0})
+                                        </h3>
+                                        {(selectedPath?.skill_gaps || []).length > 0 ? (
+                                            <div className="space-y-4">
+                                                {(selectedPath?.skill_gaps || []).map((gap: any, i: number) => {
+                                                    const rec = getActionRecommendation(gap.skill_key, gap.display_name, gap.gap_depth);
+                                                    return (
+                                                        <button
+                                                            key={i}
+                                                            onClick={() => handleInsightClick('skill', gap.display_name)}
+                                                            className="p-4 bg-white border border-amber-500/10 rounded-2xl flex flex-col gap-2 shadow-sm hover:shadow-md hover:border-amber-500/30 transition-all text-left w-full cursor-pointer group"
+                                                        >
+                                                            <div className="flex justify-between items-center w-full">
+                                                                <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
+                                                                    {gap.display_name}
+
+                                                                </span>
+                                                                <span className="text-xs font-extrabold text-[#D97706] shrink-0">Required: {gap.required.toFixed(1)} (You: {gap.current.toFixed(1)})</span>
+                                                            </div>
+                                                            <div className="bg-amber-50/30 border border-amber-100 rounded-xl p-2.5 mt-1 text-left w-full">
+                                                                <p className="text-xs text-slate-600 leading-relaxed font-semibold">
+                                                                    <span className="text-[#B45309] font-bold">Action:</span> {rec}
+                                                                </p>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-emerald-600 font-bold italic flex items-center gap-1.5">
+                                                No major skill gaps! You meet or exceed all role requirements.
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -2616,25 +2823,25 @@ const CareerOnboarding: React.FC = () => {
                                 <div className="flex items-center justify-between mb-16 flex-wrap gap-4">
                                     <div>
                                         <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
-                                            📋 A day in the life
+                                            A day in the life
                                         </h2>
                                         <p className="text-slate-500 text-sm font-medium mt-2">
                                             Here's what a day in the life of a(n) <span className="text-slate-800 font-bold">{selectedPath?.name}</span> might look like. (Click cards for info)
                                         </p>
                                     </div>
-                                    <button 
+                                    <button
                                         onClick={handleRegenerateDayInLife}
                                         disabled={isRegeneratingDay}
                                         className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 transition-all active:scale-95 shadow-sm cursor-pointer disabled:opacity-50"
                                     >
-                                        <RefreshCw className={`w-3.5 h-3.5 text-emerald-500 ${isRegeneratingDay ? 'animate-spin' : ''}`} /> Re-generate
+                                        <span className={`font-semibold text-emerald-500 ${isRegeneratingDay ? 'animate-spin' : ''}`}>↻</span> Re-generate
                                     </button>
                                 </div>
-                                
+
                                 <div className="relative space-y-4 max-w-3xl mx-auto min-h-[120px]">
                                     {isRegeneratingDay && (
                                         <div className="absolute inset-0 bg-[#F8F9FA]/70 backdrop-blur-[1px] rounded-2xl z-20 flex flex-col items-center justify-center gap-2">
-                                            <Loader2 className="w-8 h-8 text-emerald-600 animate-spin" />
+                                            <div className="w-8 h-8 border-4 border-slate-200 border-t-emerald-600 rounded-full animate-spin" />
                                             <span className="text-[10px] font-black text-emerald-700 tracking-widest uppercase italic animate-pulse">Varying Daily Routine...</span>
                                         </div>
                                     )}
@@ -2653,7 +2860,7 @@ const CareerOnboarding: React.FC = () => {
                                             </div>
                                             <div className="flex-1 flex justify-between items-start gap-4">
                                                 <p className="text-slate-600 text-sm sm:text-base leading-relaxed font-semibold mt-0.5 group-hover:text-slate-900 transition-colors">{task}</p>
-                                                <Sparkles className="w-4 h-4 text-[#7C3AED] opacity-0 group-hover:opacity-100 transition-opacity duration-300 mt-1 shrink-0" />
+
                                             </div>
                                         </motion.div>
                                     ))}
@@ -2666,7 +2873,7 @@ const CareerOnboarding: React.FC = () => {
                             <div className="w-full max-w-5xl mx-auto">
                                 <div className="mb-10">
                                     <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
-                                        ✅ What you'd need
+                                        What you'd need
                                     </h2>
                                     <p className="text-slate-500 text-sm font-medium mt-2">
                                         Core requirements to transition into or excel as a <span className="text-slate-800 font-bold">{selectedPath?.name}</span>.
@@ -2682,7 +2889,7 @@ const CareerOnboarding: React.FC = () => {
                                             transition={{ duration: 0.5, delay: rIdx * 0.12 }}
                                             className="p-6 bg-slate-50 border border-slate-200/60 rounded-[1.75rem] flex flex-col gap-3 hover:shadow-md hover:border-blue-200/80 transition-all"
                                         >
-                                            <div className="w-9 h-9 rounded-xl bg-[#1B66EC]/10 flex items-center justify-center shrink-0">
+                                            <div className="w-9 h-9 rounded-xl bg-[#7C3AED]/10 flex items-center justify-center shrink-0">
                                                 <span className="text-[#1B66EC] font-black text-base">{rIdx + 1}</span>
                                             </div>
                                             <p className="text-slate-700 text-sm font-semibold leading-relaxed">{req}</p>
@@ -2692,12 +2899,91 @@ const CareerOnboarding: React.FC = () => {
                             </div>
                         </div>
 
+                        {/* 6-Month Learning Blueprint */}
+                        <div className="w-full bg-slate-50/50 border-t border-slate-100 py-24 px-6 text-left">
+                            <div className="w-full max-w-5xl mx-auto">
+                                <div className="mb-12">
+                                    <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
+                                        6-Month Learning Blueprint
+                                    </h2>
+                                    <p className="text-slate-500 text-sm font-medium mt-2">
+                                        A comprehensive month-by-month technical progression strategy engineered for transitioning into a <span className="text-slate-800 font-bold">{selectedPath?.name}</span>.
+                                    </p>
+                                </div>
+                                <div className="relative">
+                                    {isGeneratingRoadmap ? (
+                                        <div className="py-20 flex flex-col items-center justify-center bg-white border border-slate-200 rounded-[2.5rem] border-dashed shadow-sm">
+                                            <div className="w-8 h-8 border-4 border-slate-200 border-t-[#7C3AED] rounded-full animate-spin mb-4" />
+                                            <p className="text-xs text-slate-400 font-bold tracking-wider uppercase animate-pulse">Compiling Pathway Blueprint...</p>
+                                        </div>
+                                    ) : roadmapData && roadmapData.length > 0 ? (
+                                        <div className="space-y-0 relative">
+                                            {roadmapData.map((month: any, idx: number) => (
+                                                <RoadmapCard
+                                                    key={idx}
+                                                    month={month}
+                                                    idx={idx}
+                                                    isLast={idx === roadmapData.length - 1}
+                                                    onDetails={setSelectedDetailMonth}
+                                                />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="py-16 text-center bg-white border border-slate-200 rounded-[2.5rem] border-dashed shadow-sm">
+                                            <p className="text-sm text-slate-400 font-bold uppercase">No blueprint matches synthesized yet.</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Salary Trajectory */}
+                        <div className="w-full bg-white border-t border-slate-100 py-20 px-6 text-left">
+                            <div className="w-full max-w-5xl mx-auto">
+                                <div className="mb-10">
+                                    <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight flex items-center gap-2">
+                                        Salary Trajectory
+                                    </h2>
+                                    <p className="text-slate-500 text-sm font-medium mt-2">
+                                        Typical compensation progression curve for a <span className="text-slate-800 font-bold">{selectedPath?.name}</span>.
+                                    </p>
+                                </div>
+
+                                <div className="grid md:grid-cols-3 gap-6 relative mt-12">
+                                    {/* Connected Line Background */}
+                                    <div className="absolute top-1/2 left-0 right-0 h-1 bg-purple-100 -translate-y-1/2 hidden md:block z-0" />
+
+                                    {/* Entry level card */}
+                                    <div className="bg-slate-50/50 border border-slate-200/60 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center relative z-10 hover:border-blue-400/80 bg-white">
+                                        <span className="px-3 py-1 bg-purple-50 text-[#1B66EC] text-[10px] font-black rounded-full uppercase tracking-wider mb-3">Entry-Level</span>
+                                        <div className="text-2xl font-black text-slate-800 mb-1">{pathDetails?.salary?.entry || (selectedPath?.salary?.entry) || "$70,000"}</div>
+                                        <p className="text-slate-400 text-xs font-semibold">0-2 years experience</p>
+                                    </div>
+
+                                    {/* Mid level card */}
+                                    <div className="bg-slate-50/50 border-2 border-[#1B66EC]/40 rounded-3xl p-6 shadow-md hover:shadow-lg transition-all flex flex-col items-center text-center relative z-10 hover:border-[#1B66EC] bg-white">
+                                        <div className="absolute -top-3 px-3 py-0.5 bg-[#7C3AED] text-white text-[9px] font-black rounded-full uppercase tracking-widest">Typical Mid</div>
+                                        <span className="px-3 py-1 bg-green-50 text-green-600 text-[10px] font-black rounded-full uppercase tracking-wider mb-3 mt-1">Mid-Career</span>
+                                        <div className="text-3xl font-black text-slate-800 mb-1">{pathDetails?.salary?.mid || (selectedPath?.salary?.mid) || "$115,000"}</div>
+                                        <p className="text-slate-400 text-xs font-semibold">3-5 years experience</p>
+                                    </div>
+
+                                    {/* Senior level card */}
+                                    <div className="bg-slate-50/50 border border-slate-200/60 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all flex flex-col items-center text-center relative z-10 hover:border-purple-400/80 bg-white">
+                                        <span className="px-3 py-1 bg-purple-50 text-purple-600 text-[10px] font-black rounded-full uppercase tracking-wider mb-3">Senior-Level</span>
+                                        <div className="text-2xl font-black text-slate-800 mb-1">{pathDetails?.salary?.senior || (selectedPath?.salary?.senior) || "$160,000+"}</div>
+                                        <p className="text-slate-400 text-xs font-semibold">5+ years experience</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                         {/* Section 5: Upskilling Resources Carousel */}
                         <div className="w-full bg-[#F8F9FA] border-t border-slate-100 py-20 px-6 pb-48 text-center">
                             <div className="w-full max-w-3xl mx-auto">
                                 <div className="mb-10">
                                     <h2 className="text-3xl font-extrabold text-slate-800 tracking-tight flex items-center justify-center gap-2">
-                                        🚀 Upskilling Resources
+                                        Upskilling Resources
                                     </h2>
                                     <p className="text-slate-500 text-sm font-medium mt-3 max-w-xl mx-auto leading-relaxed">
                                         The below resources might help you develop some of the knowledge and skills you'd need as a(n){" "}
@@ -2707,7 +2993,7 @@ const CareerOnboarding: React.FC = () => {
 
                                 {isGeneratingCourses ? (
                                     <div className="flex flex-col items-center justify-center py-16 gap-3">
-                                        <Loader2 className="w-8 h-8 text-[#1B66EC] animate-spin" />
+                                        <div className="w-8 h-8 border-4 border-slate-200 border-t-[#7C3AED] rounded-full animate-spin" />
                                         <p className="text-xs text-slate-400 font-bold tracking-wider uppercase animate-pulse">Retrieving elite learning pathways...</p>
                                     </div>
                                 ) : recommendedCourses.length > 0 ? (
@@ -2733,10 +3019,6 @@ const CareerOnboarding: React.FC = () => {
                                                             {recommendedCourses[carouselIndex].title}
                                                         </h3>
                                                     </div>
-                                                    {/* Illustration Box */}
-                                                    <div className="mx-6 mt-4 mb-2 rounded-2xl bg-slate-50/80 border border-slate-100 overflow-hidden" style={{ height: "180px" }}>
-                                                        {renderIllustration(recommendedCourses[carouselIndex].icon_type || 'development')}
-                                                    </div>
                                                     {/* Description */}
                                                     <div className="px-8 py-5 text-left space-y-3">
                                                         <p className="text-slate-600 text-sm leading-relaxed font-medium">
@@ -2756,7 +3038,7 @@ const CareerOnboarding: React.FC = () => {
                                                                 const url = course.url || `https://www.coursera.org/search?query=${encodeURIComponent(course.title)}`;
                                                                 window.open(url, "_blank");
                                                             }}
-                                                            className="w-full py-4 bg-[#1B66EC] hover:bg-blue-700 text-white rounded-full font-bold text-sm transition-all shadow-lg active:scale-[0.98] cursor-pointer"
+                                                            className="w-full py-4 bg-[#7C3AED] hover:bg-[#6D28D9] text-white rounded-full font-bold text-sm transition-all shadow-lg active:scale-[0.98] cursor-pointer"
                                                         >
                                                             Learn more
                                                         </button>
@@ -2771,7 +3053,7 @@ const CareerOnboarding: React.FC = () => {
                                                 onClick={() => setCarouselIndex(prev => Math.max(0, prev - 1))}
                                                 className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-4 w-10 h-10 rounded-full bg-white shadow-lg border border-slate-100 flex items-center justify-center hover:bg-slate-50 active:scale-90 transition-all cursor-pointer z-10"
                                             >
-                                                <ChevronLeft className="w-5 h-5 text-slate-500" />
+                                                <span className="text-xl font-bold text-slate-500">←</span>
                                             </button>
                                         )}
                                         {carouselIndex < recommendedCourses.length - 1 && (
@@ -2779,7 +3061,7 @@ const CareerOnboarding: React.FC = () => {
                                                 onClick={() => setCarouselIndex(prev => Math.min(recommendedCourses.length - 1, prev + 1))}
                                                 className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-4 w-10 h-10 rounded-full bg-white shadow-lg border border-slate-100 flex items-center justify-center hover:bg-slate-50 active:scale-90 transition-all cursor-pointer z-10"
                                             >
-                                                <ChevronRight className="w-5 h-5 text-slate-500" />
+                                                <span className="text-xl font-bold text-slate-500">→</span>
                                             </button>
                                         )}
 
@@ -2789,11 +3071,10 @@ const CareerOnboarding: React.FC = () => {
                                                 <button
                                                     key={dotIdx}
                                                     onClick={() => setCarouselIndex(dotIdx)}
-                                                    className={`rounded-full transition-all cursor-pointer ${
-                                                        dotIdx === carouselIndex
-                                                            ? "w-5 h-2.5 bg-[#1B66EC]"
+                                                    className={`rounded-full transition-all cursor-pointer ${dotIdx === carouselIndex
+                                                            ? "w-5 h-2.5 bg-[#7C3AED]"
                                                             : "w-2.5 h-2.5 bg-slate-300 hover:bg-slate-400"
-                                                    }`}
+                                                        }`}
                                                 />
                                             ))}
                                         </div>
@@ -2823,11 +3104,11 @@ const CareerOnboarding: React.FC = () => {
                                     >
                                         <div>
                                             {/* Close Button */}
-                                            <button 
+                                            <button
                                                 onClick={() => setSelectedInsightItem(null)}
                                                 className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition-all cursor-pointer border border-white/5 active:scale-90"
                                             >
-                                                <X className="w-5 h-5" />
+                                                <span className="text-xl font-light text-white leading-none">×</span>
                                             </button>
 
                                             <div className="mt-12">
@@ -2837,13 +3118,13 @@ const CareerOnboarding: React.FC = () => {
                                                 <h2 className="text-2xl font-black tracking-tight mt-6 mb-4 capitalize leading-tight">
                                                     {selectedInsightItem.name}
                                                 </h2>
-                                                
+
                                                 <div className="h-[2px] w-12 bg-white/40 my-6" />
                                             </div>
 
                                             {isGeneratingInsight ? (
                                                 <div className="flex flex-col items-center justify-center py-20 gap-4">
-                                                    <Loader2 className="w-8 h-8 text-white animate-spin" />
+                                                    <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin" />
                                                     <p className="text-[10px] text-white/70 font-black uppercase tracking-widest animate-pulse">Consulting Pathways Oracle...</p>
                                                 </div>
                                             ) : (
@@ -2868,7 +3149,7 @@ const CareerOnboarding: React.FC = () => {
                                                     </div>
 
                                                     <div className="bg-white/10 border border-white/15 rounded-[1.5rem] p-5 shadow-inner mt-4">
-                                                        <h4 className="text-[10px] font-black text-amber-300 uppercase tracking-widest mb-1">💡 Insider Pro Tip:</h4>
+                                                        <h4 className="text-[10px] font-black text-amber-300 uppercase tracking-widest mb-1">Insider Pro Tip:</h4>
                                                         <p className="text-white/90 text-xs sm:text-sm font-semibold leading-relaxed">
                                                             {insightData?.pro_tip}
                                                         </p>

@@ -5574,10 +5574,183 @@ class CareerOnboardingRequest(BaseModel):
     interests: List[str]
     role: str = ""
 
+class CareerAnalysisRequest(BaseModel):
+    subject: str
+    skills: List[str]
+    interests: List[str]
+    role: str = ""
+    projects: str = ""
+    clubs: str = ""
+    ambitions: str = ""
+    work_preferences: str = ""
+    selected_tasks: Optional[List[str]] = None
+
+class CareerExplanationRequest(BaseModel):
+    career_path: str
+    subject: str
+    skills: List[str]
+    interests: List[str]
+    role: str = ""
+    projects: str = ""
+    clubs: str = ""
+    ambitions: str = ""
+    work_preferences: str = ""
+    skill_vector: Optional[Dict[str, float]] = None
+
+@app.post("/api/career/analyze")
+async def analyze_career(req: CareerAnalysisRequest):
+    try:
+        from services.skill_extractor import extract_skills_and_inferences
+        from services.role_matcher import match_user_to_roles
+        
+        profile_dict = req.dict()
+        skill_vector, inferences = extract_skills_and_inferences(profile_dict)
+        matched_roles = match_user_to_roles(skill_vector, profile_dict, limit=8)
+        
+        return {
+            "skill_vector": skill_vector,
+            "inferences": inferences,
+            "roles": matched_roles
+        }
+    except Exception as e:
+        logger.error(f"Error in /api/career/analyze: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/career/explain")
+async def explain_career(req: CareerExplanationRequest):
+    try:
+        from services.career_taxonomy import ROLE_DATABASE
+        role_name = req.career_path
+        
+        # Look up defaults in the taxonomy database
+        role_info = ROLE_DATABASE.get(role_name, {})
+        
+        fallback_desc = role_info.get("description", f"A {role_name} designs, develops, and implements high-impact systems aligned with industrial scale and performance optimization.")
+        typical_degree = role_info.get("typical_degree", "Bachelor's degree")
+        salary = role_info.get("salary", {"entry": "$70,000", "mid": "$115,000", "senior": "$160,000+"})
+        avg_salary = salary.get("mid", "$115,000")
+        
+        # Build prompt for personalized explanation
+        prompt = f"""
+        You are an elite Career Mentor and Pathways Architect.
+        Analyze the student's profile:
+        - Academic Background / Subject: {req.subject}
+        - Explicit Skills: {', '.join(req.skills)}
+        - Interests: {', '.join(req.interests)}
+        - Current/Previous Role: {req.role}
+        - Projects: {req.projects}
+        - Clubs/Activities: {req.clubs}
+        - Ambitions: {req.ambitions}
+        - Work Preferences: {req.work_preferences}
+        
+        Target career path: '{role_name}'
+        
+        Generate a JSON object containing EXACTLY these fields (no markdown formatting outside of JSON, no surrounding code block except raw JSON):
+        {{
+          "identity_statement": "An inspiring, highly detailed, and professional 3-sentence career identity statement tailored for this student in the context of their target career path (about 80-120 words). Summarize their competencies and future potential.",
+          "sweet_spot_explanation": "A deeply personalized, inspiring explanation of how their specific background in '{req.subject}' and their experiences perfectly position them for a '{role_name}' (2-3 sentences).",
+          "day_in_the_life": [
+            "Write exactly 5 highly-tailored, professional, and actionable daily tasks (1 sentence each) that a professional in this path performs.",
+            "...", "...", "...", "..."
+          ],
+          "requirements": [
+            "Write exactly 3 core technical or experiential requirements/prerequisites (1 sentence each) to succeed in this path.",
+            "...", "..."
+          ]
+        }}
+        """
+        
+        identity_statement = ""
+        sweet_spot_explanation = ""
+        day_in_the_life = []
+        requirements = []
+        
+        try:
+            chat_completion = career_client.chat.completions.create(
+                messages=[{"role": "user", "content": prompt}],
+                model="llama-3.3-70b-versatile",
+                response_format={"type": "json_object"}
+            )
+            content = chat_completion.choices[0].message.content or "{}"
+            res = json.loads(content)
+            
+            identity_statement = res.get("identity_statement", "")
+            sweet_spot_explanation = res.get("sweet_spot_explanation", "")
+            day_in_the_life = res.get("day_in_the_life", [])
+            requirements = res.get("requirements", [])
+        except Exception as e:
+            logger.warning(f"Groq explanation failed or timed out: {e}. Using deterministic fallback.")
+            
+        # If any of the generated fields are empty, populate with sensible defaults
+        if not identity_statement:
+            fallback_subject = req.subject if req.subject else req.role
+            skills_str = ", ".join(req.skills[:3]) if req.skills else "domain skills"
+            identity_statement = f"As a driven professional with a background in {fallback_subject}, I am actively building expertise in {skills_str}. My career journey is defined by a commitment to mastering key domain strategies and implementing scalable, high-impact solutions that drive innovation."
+            
+        if not sweet_spot_explanation:
+            sweet_spot_explanation = f"Your background in {req.subject} and skills in {', '.join(req.skills[:2]) if req.skills else 'core competencies'} provide an exceptional launching pad. The analytical logic and design fundamentals you possess perfectly overlap with the core demands of a {role_name}."
+            
+        if not day_in_the_life or len(day_in_the_life) < 5:
+            day_in_the_life = [
+                f"Analyze target requirements and design robust system architectures for {role_name} protocols.",
+                "Write high-quality, scalable code and scripts to automate core subsystem workflows.",
+                "Integrate specialized toolsets, hardware controllers, and database solutions at scale.",
+                "Perform rigorous testing, diagnostic debugging, and performance profiling on current deployments.",
+                "Collaborate with multidisciplinary engineering squads to align on strategic product delivery."
+            ]
+            
+        if not requirements or len(requirements) < 3:
+            requirements = [
+                f"Proficiency in core engineering, scripting, and system design tools relevant to {role_name}.",
+                "Strong analytical logic, mathematical reasoning, and problem-solving fundamentals.",
+                "Familiarity with industry-grade software design lifecycles, database structures, or automation systems."
+            ]
+            
+        return {
+            "identity_statement": identity_statement,
+            "description": fallback_desc,
+            "avg_salary": avg_salary,
+            "typical_degree": typical_degree,
+            "salary": salary,
+            "sweet_spot_explanation": sweet_spot_explanation,
+            "day_in_the_life": day_in_the_life,
+            "requirements": requirements
+        }
+    except Exception as e:
+        logger.error(f"Error in /api/career/explain: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/career/path-details")
+async def get_career_path_details(req: dict):
+    # Wrapper that maps old request payload structure to /api/career/explain
+    career_path = req.get("career_path", "Professional Role")
+    subject = req.get("subject", "general background")
+    skills = req.get("skills", [])
+    interests = req.get("interests", [])
+    role = req.get("role", "student")
+    projects = req.get("projects", "")
+    clubs = req.get("clubs", "")
+    ambitions = req.get("ambitions", "")
+    work_preferences = req.get("work_preferences", "")
+    
+    explain_req = CareerExplanationRequest(
+        career_path=career_path,
+        subject=subject,
+        skills=skills,
+        interests=interests,
+        role=role,
+        projects=projects,
+        clubs=clubs,
+        ambitions=ambitions,
+        work_preferences=work_preferences
+    )
+    return await explain_career(explain_req)
+
 @app.post("/api/career/identity")
 async def get_career_identity(req: CareerOnboardingRequest):
+    # Old identity wrapper
     role_info = f"Current/Previous Role: {req.role}. " if req.role else ""
-    prompt = f"Analyze this profile: {role_info}Field/Subject/Industry: {req.subject}. Skills: {', '.join(req.skills)}. Interests: {req.interests}. Create a highly detailed, inspiring, and professional career identity statement in a paragraph of 3-4 sentences (about 80-120 words). Summarize their strengths, key competencies, and future potential. Start with a strong statement of their role and potential."
+    prompt = f"Analyze this profile: {role_info}Field/Subject/Industry: {req.subject}. Skills: {', '.join(req.skills)}. Interests: {req.interests}. Create a highly detailed, inspiring, and professional career identity statement in a paragraph of 3-4 sentences (about 80-120 words). Summarize their strengths, key competencies, and future potential."
     try:
         chat_completion = career_client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
@@ -5592,34 +5765,63 @@ async def get_career_identity(req: CareerOnboardingRequest):
 
 @app.post("/api/career/explore-paths")
 async def explore_career_paths(req: CareerOnboardingRequest):
-    role_info = f"Current/Previous Role: {req.role}. " if req.role else ""
-    prompt = f"""
-    You are a Senior Global Career Architect at an elite technology consultancy.
-    Your task is to analyze the student's profile ({role_info}Subject: {req.subject}, Skills: {req.skills}, Interests: {req.interests}) 
-    and generate exactly 20 HIGHLY ACCURATE, industry-standard professional career paths.
+    # Old explore-paths wrapper
+    from services.skill_extractor import extract_skills_and_inferences
+    from services.role_matcher import match_user_to_roles
+    import math
     
-    CRITICAL ACCURACY GUIDELINES:
-    1. The job titles MUST be 100% correct, professional, and current.
-    2. Provide specialized expert roles (e.g., 'Cloud Infrastructure Architect' instead of just 'Cloud Engineer').
-    3. Return ONLY a JSON object with key 'paths'. 
-    Each path MUST have: 
-    - name: industry-standard title
-    - group: category (Cloud, AI, Web, Cyber, Data, etc.)
-    - pos: {{'x': int, 'y': int}} (Spread them across a wide NEAT GRID. x: -550 to 550, y: -450 to 450. min 180px from center.)
-    - color: a unique vibrant hex code for the node glow.
-    - image: a high-quality professional Unsplash URL specifically representing this exact career role.
-    """
-    try:
-        chat_completion = career_client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
-            response_format={"type": "json_object"}
-        )
-        content = chat_completion.choices[0].message.content or "{}"
-        res = json.loads(content)
-        return {"paths": res.get("paths", [])}
-    except Exception as e:
-        return {"paths": []}
+    profile_dict = req.dict()
+    skill_vector, _ = extract_skills_and_inferences(profile_dict)
+    matched_roles = match_user_to_roles(skill_vector, profile_dict, limit=20)
+    
+    paths = []
+    for i, r in enumerate(matched_roles):
+        angle = (i / len(matched_roles)) * 2 * math.pi
+        radius = 250 + (i % 2) * 100
+        x = int(radius * math.cos(angle))
+        y = int(radius * math.sin(angle))
+        
+        role_name = r["name"]
+        group = "Tech"
+        if "Data" in role_name or "Scientist" in role_name or "Analyst" in role_name:
+            group = "Data"
+        elif "Cloud" in role_name or "DevOps" in role_name or "SRE" in role_name:
+            group = "Cloud"
+        elif "Design" in role_name or "UX" in role_name or "UI" in role_name:
+            group = "Design"
+        elif "Product" in role_name or "Manager" in role_name or "Agile" in role_name:
+            group = "Product"
+        elif "Security" in role_name or "Cyber" in role_name:
+            group = "Security"
+        elif "Engineer" in role_name or "Developer" in role_name:
+            group = "Software"
+            
+        colors = {
+            "Software": "#3B82F6",
+            "Data": "#10B981",
+            "Cloud": "#8B5CF6",
+            "Design": "#EC4899",
+            "Product": "#F59E0B",
+            "Security": "#EF4444",
+            "Tech": "#6B7280"
+        }
+        color = colors.get(group, "#3B82F6")
+        
+        image_url = f"https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=150"
+        
+        paths.append({
+            "name": role_name,
+            "group": group,
+            "pos": {"x": x, "y": y},
+            "color": color,
+            "image": image_url,
+            "match_percentage": r["match_percentage"],
+            "matched_strengths": [s["display_name"] for s in r["matched_strengths"][:3]],
+            "skill_gaps": [g["display_name"] for g in r["skill_gaps"][:3]],
+            "why_matched": r["why_matched"]
+        })
+        
+    return {"paths": paths}
 
 @app.post("/api/career/roadmap")
 async def generate_career_roadmap(req: dict):
@@ -5628,6 +5830,34 @@ async def generate_career_roadmap(req: dict):
         path_name = path_data.get("name", "Career")
     else:
         path_name = req.get("career_path", req.get("path_name", "Career"))
+        
+    from services.career_taxonomy import ROLE_DATABASE
+    if path_name in ROLE_DATABASE:
+        taxonomy_roadmap = ROLE_DATABASE[path_name].get("roadmap", [])
+        if taxonomy_roadmap:
+            # Process and fill missing fields (details, project)
+            processed_roadmap = []
+            for phase in taxonomy_roadmap:
+                title = phase.get("title", "")
+                stack = phase.get("stack", "")
+                tasks = phase.get("tasks", [])
+                
+                # Default details and project if not in taxonomy
+                details = phase.get("details", f"Establish a solid foundation in {title} concepts and apply them using {stack}.")
+                project = phase.get("project", f"{title} Implementation Project")
+                
+                processed_roadmap.append({
+                    "month": phase.get("month"),
+                    "title": title,
+                    "details": details,
+                    "tasks": tasks,
+                    "stack": stack,
+                    "concepts": phase.get("concepts", ""),
+                    "project": project
+                })
+            return {"roadmap": processed_roadmap}
+            
+    # Fallback to LLM if the career path is not in our taxonomy database
     prompt = f"""
     You are a Senior Professional Blueprint Architect. 
     Your task is to generate a 100% accurate, high-fidelity 6-month roadmap for the career path: '{path_name}'.
@@ -5659,77 +5889,6 @@ async def generate_career_roadmap(req: dict):
         return {"roadmap": res.get("roadmap", [])}
     except Exception as e:
         return {"roadmap": []}
-
-@app.post("/api/career/path-details")
-async def get_career_path_details(req: dict):
-    path_name = req.get("career_path", "Professional Role")
-    subject = req.get("subject", "general background")
-    skills = req.get("skills", [])
-    role = req.get("role", "student")
-    interests = req.get("interests", [])
-    
-    prompt = f"""
-    You are a Senior Career Pathways Strategist.
-    Analyze the alignment between the user's profile:
-    - Current/Previous Role: {role}
-    - Academic/Background Field: {subject}
-    - Active Selected Skills: {', '.join(skills)}
-    - Personal Interests: {', '.join(interests)}
-    
-    And the target career path: '{path_name}'.
-    
-    Generate detailed, high-fidelity career pathway details.
-    Your response MUST be a single, well-formed JSON object containing exactly these fields:
-    - 'description': a customized, highly engaging 2-3 sentence overview of this target role and why it is a powerful destination.
-    - 'avg_salary': an industry-standard average yearly salary string (e.g., '$118,000' or '$125,000') suitable for this path.
-    - 'typical_degree': the typical educational qualification required (e.g., 'Bachelor\\'s degree', 'Master\\'s degree').
-    - 'sweet_spot_explanation': a deeply personalized, beautiful, and inspiring explanation of overlap (2-3 sentences). Explicitly state how their specific background in '{subject}' combined with their active skills like {', '.join(skills[:3])} provides a powerful 'sweet spot' foundation for transitioning or excelling in this path.
-    - 'day_in_the_life': an array of exactly 5 highly-tailored, professional, and actionable daily tasks (1 sentence each) that a professional in this path performs on a day-to-day basis.
-    - 'requirements': an array of exactly 3 core technical, logical, or experiential requirements/prerequisites (1 sentence each) to successfully transition into and excel as a '{path_name}'.
-    """
-    try:
-        chat_completion = career_client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
-            response_format={"type": "json_object"}
-        )
-        content = chat_completion.choices[0].message.content or "{}"
-        res = json.loads(content)
-        return {
-            "description": res.get("description", ""),
-            "avg_salary": res.get("avg_salary", "$115,000"),
-            "typical_degree": res.get("typical_degree", "Bachelor's degree"),
-            "sweet_spot_explanation": res.get("sweet_spot_explanation", ""),
-            "day_in_the_life": res.get("day_in_the_life", []),
-            "requirements": res.get("requirements", [
-                "Proficiency in core engineering, scripting, and system design tools.",
-                "Strong analytical logic, mathematical reasoning, and problem-solving fundamentals.",
-                "Familiarity with industry-grade software design lifecycles or automation systems."
-            ])
-        }
-    except Exception as e:
-        fallback_desc = f"A {path_name} designs, develops, and implements high-impact systems aligned with industrial scale and performance optimization."
-        fallback_sweet = f"Your background in {subject} and skills in {', '.join(skills[:2]) if skills else 'core competencies'} provide an exceptional launching pad. The mathematical logic and design fundamentals you possess perfectly overlap with the core demands of a {path_name}."
-        fallback_day = [
-            f"Analyze target requirements and design robust system architectures for {path_name} protocols.",
-            "Write high-quality, scalable code and scripts to automate core subsystem workflows.",
-            "Integrate specialized toolsets, hardware controllers, and database solutions at scale.",
-            "Perform rigorous testing, diagnostic debugging, and performance profiling on current deployments.",
-            "Collaborate with multidisciplinary engineering squads to align on strategic product delivery."
-        ]
-        fallback_reqs = [
-            f"Proficiency in core engineering, scripting, and system design tools relevant to {path_name}.",
-            f"Strong analytical logic, mathematical reasoning, and problem-solving fundamentals.",
-            f"Familiarity with industry-grade software design lifecycles, database structures, or automation systems."
-        ]
-        return {
-            "description": fallback_desc,
-            "avg_salary": "$118,000",
-            "typical_degree": "Bachelor's degree",
-            "sweet_spot_explanation": fallback_sweet,
-            "day_in_the_life": fallback_day,
-            "requirements": fallback_reqs
-        }
 
 
 class InsightRequest(BaseModel):
