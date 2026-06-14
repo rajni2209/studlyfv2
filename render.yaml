@@ -74,8 +74,10 @@ services:
       - key: SENTRY_DSN
         sync: false
 
-      # ── Logging ────────────────────────────────────────────────────────────
+      # ── Logging & Memory Optimization ───────────────────────────────────────
       - key: LOG_LEVEL
         value: info
       - key: GUNICORN_WORKERS
-        value: "2"            # Render free tier: keep at 2
+        value: "1"            # Render free tier: strictly 1 worker
+      - key: PYTHONMALLOC
+        value: malloc         # Lowers Python memory fragmentation
