@@ -1,12 +1,18 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, Body
-from db import certificates_col, events_col, participants_col, submission_data_col, scores_col, users_col, teams_col
+from db import db, certificates_col, events_col, participants_col, submission_data_col, scores_col, users_col, teams_col, cert_templates_col, event_certificates_col
 from auth_institution import get_auth_user
 from bson import ObjectId
 from typing import Optional, List
 from datetime import datetime
+import uuid
 from services.institutional_certificate_service import certificate_service, ACHIEVEMENT_TYPES, VALID_ACHIEVEMENTS
 
 router = APIRouter(prefix="/api/v1/institution/certificates", tags=["Achievement Registry"])
+
+# The frontend calls /api/v1/institution/certificates/templates
+# The current router prefix is /api/v1/institution/certificates
+# So @router.get("/templates") results in /api/v1/institution/certificates/templates
+# This IS correct.
 
 
 async def _get_leaderboard_for_event(event_id: str, stage_id: str | None = None):
@@ -109,11 +115,16 @@ async def get_eligibility_preview(
 
 @router.post("/eligible-recipients")
 async def get_eligible_recipients(
-    event_id: str,
-    stage_id: str = None,
-    min_score: float = Query(0, description="Minimum score filter"),
+    payload: dict = Body(...),
     user: dict = Depends(get_auth_user),
 ):
+    event_id = payload.get("event_id")
+    stage_id = payload.get("stage_id")
+    min_score = float(payload.get("min_score", 0))
+    
+    if not event_id:
+        raise HTTPException(status_code=400, detail="event_id is required")
+        
     entries = await _get_leaderboard_for_event(event_id, stage_id)
     if min_score > 0:
         entries = [e for e in entries if e["score"] >= min_score]
@@ -175,11 +186,12 @@ async def get_eligible_recipients(
 
 @router.post("/issue")
 async def issue_certificates(
-    event_id: str,
-    recipient_ids: List[str] = Query(..., description="List of submission/participant IDs"),
+    event_id: str = Query(...),
+    recipient_ids: List[str] = Body(..., embed=True, description="List of submission/participant IDs"),
     achievement_type: str = Query("participation", description="Achievement type key"),
     send_email: bool = Query(False),
     rank: Optional[int] = Query(None),
+    template_id: Optional[str] = Query(None, description="Template ID to use"),
     user: dict = Depends(get_auth_user),
 ):
     role = str(user.get("role") or "").lower()
@@ -201,8 +213,16 @@ async def issue_certificates(
 
     issued = []
     for sid in recipient_ids:
+        # Helper to convert to ObjectId if valid, else keep as string
+        def to_oid(s):
+            if ObjectId.is_valid(s):
+                return ObjectId(s)
+            return s
+
+        sid_query = to_oid(sid)
+        
         # Try to resolve from submission_data_col first, then participants_col
-        sub = await submission_data_col.find_one({"_id": ObjectId(sid)})
+        sub = await submission_data_col.find_one({"_id": sid_query})
         user_id = None
         participant_name = "Participant"
         team_id = None
@@ -213,7 +233,7 @@ async def issue_certificates(
             team_id = str(sub.get("team_id") or "")
         else:
             # Fall back to participants_col (for non-qualifiers without submissions)
-            participant = await participants_col.find_one({"_id": ObjectId(sid)})
+            participant = await participants_col.find_one({"_id": sid_query})
             if not participant:
                 # Try treating sid as a user_id
                 participant = await participants_col.find_one({"event_id": event_id, "user_id": sid})
@@ -250,6 +270,7 @@ async def issue_certificates(
             institution_id=institution_id,
             rank=rank,
             team_id=team_id or None,
+            template_id=template_id, # ADDED
         )
         issued.append(record)
 
@@ -274,22 +295,119 @@ async def get_certificate_registry(
     query = {"institution_id": institution_id}
     if event_id and event_id != "All Events":
         query["event_id"] = event_id
+    # Note: stage_id might not be in event_certificates
     if stage_id and stage_id != "All Stages":
         query["stage_id"] = stage_id
     if type and type != "All Types":
-        query["type"] = type
+        query["achievement_key"] = type
     if category and category != "All Certificates":
         query["category"] = category
     if status and status != "All Status":
         query["status"] = status
     if search:
         query["$or"] = [
-            {"recipient_name": {"$regex": search, "$options": "i"}},
-            {"student_name": {"$regex": search, "$options": "i"}},
+            {"participant_name": {"$regex": search, "$options": "i"}},
             {"team_name": {"$regex": search, "$options": "i"}},
             {"certificate_id": {"$regex": search, "$options": "i"}},
         ]
-    certs = await certificates_col.find(query).sort("issued_on", -1).to_list(length=100)
+    # FIX: Use event_certificates_col instead of certificates_col
+    certs = await event_certificates_col.find(query).sort("issued_at", -1).to_list(length=100)
     for c in certs:
         c["_id"] = str(c["_id"])
     return certs
+
+
+# Template Builder Endpoints
+@router.get("/templates")
+async def list_cert_templates_for_institution(user: dict = Depends(get_auth_user)):
+    """Institution-scoped: list all certificate templates (built-in + custom).
+    Unlike /api/admin/cert-templates, this uses institution JWT auth instead of super-admin."""
+    # Use the imported cert_templates_col directly
+    results = []
+    async for doc in cert_templates_col.find({}):
+        doc["_id"] = str(doc["_id"])
+        results.append(doc)
+    builtins = [
+        {"template_id": "standard", "name": "Standard (Default)", "description": "Studlyf default certificate", "is_builtin": True},
+        {"template_id": "honors",   "name": "Elite Honors",        "description": "Purple honours certificate",  "is_builtin": True},
+    ]
+    return builtins + results
+
+@router.post("/templates")
+async def create_cert_template_for_institution(payload: dict = Body(...), user: dict = Depends(get_auth_user)):
+    """Institution-scoped: create a new certificate template.
+    Uses institution JWT auth instead of super-admin."""
+    cert_templates_col = db["cert_templates"]
+    template_id = str(uuid.uuid4())[:8]
+    doc = {
+        "template_id": template_id,
+        "name": payload.get("name", "Certificate Template"),
+        "html_content": payload.get("html_content", ""),
+        "description": payload.get("description", ""),
+        "preview_thumbnail": payload.get("preview_thumbnail", ""),
+        "created_at": datetime.utcnow().isoformat(),
+        "created_by": str(user.get("user_id") or user.get("email") or ""),
+        "is_builtin": False,
+    }
+    await cert_templates_col.insert_one(doc)
+    doc["_id"] = str(doc.get("_id", ""))
+    return doc
+
+@router.put("/templates/{template_id}")
+async def update_cert_template_for_institution(
+    template_id: str,
+    payload: dict = Body(...),
+    user: dict = Depends(get_auth_user)
+):
+    """Institution-scoped: update a certificate template."""
+    cert_templates_col = db["cert_templates"]
+    
+    # Check if template exists and user has permission
+    existing = await cert_templates_col.find_one({"template_id": template_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    # Only allow update if user created the template or is super admin
+    if existing.get("created_by") != str(user.get("user_id") or user.get("email") or ""):
+        role = str(user.get("role") or "").lower()
+        if role != "super_admin":
+            raise HTTPException(status_code=403, detail="Permission denied")
+    
+    update_data = {
+        "name": payload.get("name", existing.get("name", "")),
+        "html_content": payload.get("html_content", existing.get("html_content", "")),
+        "description": payload.get("description", existing.get("description", "")),
+        "preview_thumbnail": payload.get("preview_thumbnail", existing.get("preview_thumbnail", "")),
+        "updated_at": datetime.utcnow().isoformat(),
+    }
+    
+    await cert_templates_col.update_one(
+        {"template_id": template_id},
+        {"$set": update_data}
+    )
+    
+    updated = await cert_templates_col.find_one({"template_id": template_id})
+    updated["_id"] = str(updated.get("_id", ""))
+    return updated
+
+@router.delete("/templates/{template_id}")
+async def delete_cert_template_for_institution(
+    template_id: str,
+    user: dict = Depends(get_auth_user)
+):
+    """Institution-scoped: delete a certificate template."""
+    cert_templates_col = db["cert_templates"]
+    
+    # Check if template exists and user has permission
+    existing = await cert_templates_col.find_one({"template_id": template_id})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    # Only allow delete if user created the template or is super admin
+    if existing.get("created_by") != str(user.get("user_id") or user.get("email") or ""):
+        role = str(user.get("role") or "").lower()
+        if role != "super_admin":
+            raise HTTPException(status_code=403, detail="Permission denied")
+    
+    await cert_templates_col.delete_one({"template_id": template_id})
+    return {"status": "success", "message": "Template deleted successfully"}

@@ -243,8 +243,11 @@ class InstitutionalCertificateService:
                         issue_date=issue_date,
                         certificate_id=cert_id,
                     )
-                except Exception:
+                except Exception as e:
+                    print(f"[TEMPLATE ERROR] Rendering failed for template {template_id}: {e}")
                     html = None
+            else:
+                print(f"[TEMPLATE ERROR] Template {template_id} not found or no content")
 
         if not html:
             template_path = os.path.join(os.path.dirname(__file__), '../templates/professional_certificate.html')

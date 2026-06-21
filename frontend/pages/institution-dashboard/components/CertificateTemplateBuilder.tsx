@@ -1,7 +1,21 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, Eye, EyeOff, Save, ChevronLeft } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { Plus, Trash2, Eye, EyeOff, Save, ChevronLeft, Upload } from 'lucide-react';
 import { CERT_TEMPLATES, CertData } from './CertTemplates';
 import { API_BASE_URL, authHeaders } from '../../../apiConfig';
+
+// Helper for file upload
+const uploadFile = async (file: File): Promise<string> => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${API_BASE_URL}/api/v1/institution/uploads`, {
+    method: 'POST',
+    headers: authHeaders(), // Assuming this handles multipart or isn't needed
+    body: formData
+  });
+  if (!res.ok) throw new Error('Upload failed');
+  const data = await res.json();
+  return data.url;
+};
 
 const DEFAULT: CertData = {
   certType: 'Certificate of Participation',
@@ -19,13 +33,26 @@ const DEFAULT: CertData = {
   signatories: [{ name: '', title: '', org: '' }],
 };
 
-const Field = ({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string }) => (
-  <div className="space-y-1">
-    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
-    <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
-      className="w-full px-3 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium focus:outline-none focus:border-[#6C3BFF] transition-all" />
-  </div>
-);
+const Field = ({ label, value, onChange, placeholder, onFileChange }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; onFileChange?: (f: File) => void }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between items-center">
+        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
+        {onFileChange && (
+          <button type="button" onClick={() => fileInputRef.current?.click()} className="text-[10px] text-[#6C3BFF] flex items-center gap-1 hover:underline">
+            <Upload size={10} /> Upload
+          </button>
+        )}
+      </div>
+      <input value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder}
+        className="w-full px-3 py-2.5 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium focus:outline-none focus:border-[#6C3BFF] transition-all" />
+      {onFileChange && <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={e => e.target.files?.[0] && onFileChange(e.target.files[0])} />}
+    </div>
+  );
+};
+// ... rest of the file ...
 
 const buildHtmlContent = (data: CertData, templateLabel?: string) => {
   const signatoryHtml = data.signatories.length > 0
@@ -207,7 +234,6 @@ const CertificateTemplateBuilder: React.FC<{ institutionId: string; onSave?: (da
           {/* Form */}
           <div className="space-y-5 bg-white rounded-[2rem] border border-slate-100 p-8 shadow-sm">
             <Field label="Institution Name" value={data.institutionName} onChange={v => set({ institutionName: v })} placeholder="e.g. Rajkiya Engineering College" />
-            <Field label="Certificate Type" value={data.certType} onChange={v => set({ certType: v })} placeholder="Certificate of Participation" />
             <Field label="Event / Hackathon Name" value={data.eventName} onChange={v => set({ eventName: v })} placeholder="e.g. Tekno'19 Hackathon" />
             <Field label="Body Text" value={data.bodyText} onChange={v => set({ bodyText: v })} placeholder="for participating in..." />
             <div className="grid grid-cols-2 gap-3">
@@ -215,12 +241,8 @@ const CertificateTemplateBuilder: React.FC<{ institutionId: string; onSave?: (da
               <Field label="Venue / Location" value={data.venue} onChange={v => set({ venue: v })} placeholder="College Name, City" />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Team ID (optional)" value={data.teamIdLabel} onChange={v => set({ teamIdLabel: v })} placeholder="e.g. T19A148C47" />
-              <Field label="Theme (optional)" value={data.themeLabel} onChange={v => set({ themeLabel: v })} placeholder="e.g. Smart Campus" />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Institution Logo URL" value={data.institutionLogo} onChange={v => set({ institutionLogo: v })} placeholder="https://..." />
-              <Field label="Event Logo URL" value={data.eventLogo} onChange={v => set({ eventLogo: v })} placeholder="https://..." />
+              <Field label="Institution Logo" value={data.institutionLogo} onChange={v => set({ institutionLogo: v })} placeholder="https://..." onFileChange={f => uploadFile(f).then(u => set({ institutionLogo: u }))} />
+              <Field label="Event Logo" value={data.eventLogo} onChange={v => set({ eventLogo: v })} placeholder="https://..." onFileChange={f => uploadFile(f).then(u => set({ eventLogo: u }))} />
             </div>
 
             {/* Sponsor logos */}
@@ -243,6 +265,16 @@ const CertificateTemplateBuilder: React.FC<{ institutionId: string; onSave?: (da
                   <input value={url} onChange={e => set({ sponsorLogos: data.sponsorLogos.map((s, x) => x === i ? e.target.value : s) })}
                     placeholder={`Sponsor ${i + 1} logo URL`}
                     className="flex-1 px-3 py-2 bg-slate-50 border border-slate-100 rounded-xl text-sm font-medium focus:outline-none focus:border-[#6C3BFF]" />
+                  <button type="button" onClick={async () => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = 'image/*';
+                      input.onchange = async (e: any) => {
+                          const f = e.target.files[0];
+                          if (f) { const url = await uploadFile(f); set({ sponsorLogos: data.sponsorLogos.map((s, x) => x === i ? url : s) }); }
+                      };
+                      input.click();
+                  }} className="text-[#6C3BFF]"><Upload size={16}/></button>
                   {data.sponsorLogos.length > 1 && (
                     <button onClick={() => set({ sponsorLogos: data.sponsorLogos.filter((_, x) => x !== i) })} className="text-red-400 hover:text-red-600"><Trash2 size={14} /></button>
                   )}
