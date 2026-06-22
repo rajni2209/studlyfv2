@@ -24,7 +24,7 @@ def build_certificate_email(cert, recipient_email: str):
     recipient_name = cert.get('participant_name') or cert.get('student_name') or cert.get('recipient_name') or recipient_email
     event_title = cert.get('event_title') or cert.get('event_name') or 'Your Event'
     organization_name = normalize_organization_name(cert.get('organization_name') or cert.get('organization'))
-    backend_base_url = os.getenv('RENDER_EXTERNAL_URL') or os.getenv('BACKEND_URL') or os.getenv('FRONTEND_URL', 'http://localhost:5173')
+    backend_base_url = os.getenv('RENDER_EXTERNAL_URL') or os.getenv('BACKEND_URL') or os.getenv('FRONTEND_URL', 'https://studlyf.in')
     verification_url = cert.get('verification_url') or f"{backend_base_url}/verify-certificate/{cert.get('certificate_id')}"
 
     issued_value = cert.get('issued_at') or cert.get('issued_date') or datetime.now(timezone.utc)
@@ -48,7 +48,7 @@ def build_certificate_email(cert, recipient_email: str):
 
 async def main(certificate_id, recipient_email=None, now=False, preview=False):
     await db.connect()
-    backend_base_url = os.getenv('RENDER_EXTERNAL_URL') or os.getenv('BACKEND_URL') or os.getenv('FRONTEND_URL', 'http://localhost:5173')
+    backend_base_url = os.getenv('RENDER_EXTERNAL_URL') or os.getenv('BACKEND_URL') or os.getenv('FRONTEND_URL', 'https://studlyf.in')
 
     cert = await event_certificates_col.find_one({'certificate_id': certificate_id})
     if not cert:
@@ -108,7 +108,7 @@ async def main(certificate_id, recipient_email=None, now=False, preview=False):
             'issued_date': (cert.get('issued_at') or cert.get('issued_date') or datetime.now(timezone.utc)).strftime('%d %b %Y') if hasattr((cert.get('issued_at') or cert.get('issued_date') or datetime.now(timezone.utc)), 'strftime') else str(cert.get('issued_at') or cert.get('issued_date') or datetime.now(timezone.utc)),
             'certificate_download_link': f"{backend_base_url}/download-certificate/{cert.get('certificate_id')}",
             'verification_url': cert.get('verification_url') or f"{backend_base_url}/verify-certificate/{cert.get('certificate_id')}",
-            'frontend_url': os.getenv('FRONTEND_URL', 'http://localhost:5173'),
+            'frontend_url': os.getenv('FRONTEND_URL', 'https://studlyf.in'),
             'support_email': os.getenv('VITE_SUPPORT_EMAIL', os.getenv('SUPPORT_EMAIL', 'support@studlyf.com')),
         }
         subject, body = render_template(template, template_context)

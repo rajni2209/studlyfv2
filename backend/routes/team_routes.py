@@ -119,7 +119,7 @@ async def send_team_invite(
             event_name = event.get("title") or event.get("name") or "Event"
             team_name = team.get("team_name", "Our Team")
             org_name = event.get("organisation") or event.get("organization") or "Studlyf"
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
             invite_link = f"{frontend_url}/events/join-team?code={invite_code}"
             await notify_team_invitation(
                 recipient_email=invite_email,

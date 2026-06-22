@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '..', '.env'))
 def _judge_invitation_url(token: str) -> str:
     import os
-    base = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
+    base = os.getenv("FRONTEND_URL", "https://studlyf.in").rstrip("/")
     return f"{base}/#/judge-invitation?token={token}"
 
 

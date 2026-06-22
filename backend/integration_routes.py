@@ -54,7 +54,7 @@ os.makedirs(EVENTS_UPLOAD_DIR, exist_ok=True)
 INSTITUTIONS_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads", "institutions")
 os.makedirs(INSTITUTIONS_UPLOAD_DIR, exist_ok=True)
 
-BASE_URL = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+BASE_URL = os.getenv("RENDER_EXTERNAL_URL", "https://api.studlyf.in")
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -440,7 +440,7 @@ Good luck in the next round!"""
         "stage_name": stage_name,
         "participant_name": "Alex Mercer",
         "deadline": "2026-05-29",
-        "event_link": "http://localhost:3000/dashboard/learner",
+        "event_link": "https://studlyf.in/dashboard/learner",
     }
     
     from services.email_template_service import render_stage_custom_email
@@ -1232,7 +1232,7 @@ async def send_event_deadline_reminders(event_id: str, user: dict = Depends(get_
             event_title=ev.get('title') or "Event",
             organization_name=ev.get('organisation') or ev.get('organization') or "Studlyf",
             registration_deadline=deadline_str,
-            event_link=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/#/events/{event_id}",
+            event_link=f"{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/#/events/{event_id}",
         )
         asyncio.create_task(send_notification_email(email, subject, body))
         
@@ -3181,7 +3181,7 @@ async def download_certificate(certificate_id: str):
         "event_date": issued_date,
         "issued_date": issued_date,
         "certificate_id": certificate_id,
-        "verification_url": cert.get("verification_url") or f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/verify/{certificate_id}",
+        "verification_url": cert.get("verification_url") or f"{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/verify/{certificate_id}",
         "achievement_type": cert.get("achievement_type") or cert.get("category") or "Participation",
         "organizer_signature": cert.get("organization_name") or cert.get("organization") or "Studlyf",
         "studlyf_signature": "Studlyf Authorized Signature",
@@ -4556,7 +4556,7 @@ async def _notify_new_opportunity(event_id: str):
                         recipient_email=email,
                         organizer_name=admin.get("full_name") or admin.get("name") or "Organizer",
                         event_title=title,
-                        event_link=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/#/events/{event_id}",
+                        event_link=f"{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/#/events/{event_id}",
                     )
     except Exception as e:
         logger.error(f"[ADMIN NOTIFY] Failed: {str(e)}")
@@ -7053,7 +7053,7 @@ async def bulk_onboard_members(data: dict, user: dict = Depends(get_current_user
                         </div>
 
                         <div style="text-align: center;">
-                            <a href="{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/login" class="btn-primary">Initialize Dashboard Access</a>
+                            <a href="{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/login" class="btn-primary">Initialize Dashboard Access</a>
                         </div>
 
                         <p style="font-size: 14px; font-weight: 500; text-align: center;">Need assistance? Our team is available 24/7 to help you settle in.</p>

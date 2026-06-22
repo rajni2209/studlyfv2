@@ -281,7 +281,7 @@ async def issue_certificates(
                 recipient_email = (user_doc or {}).get("email", "")
                 if recipient_email:
                     template = await get_active_template(event_id, institution_id, "certificate_issued")
-                    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                    frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
                     context = {
                         "participant_name": participant_name,
                         "event_title": event_title,
@@ -339,11 +339,25 @@ async def get_certificate_registry(
             {"team_name": {"$regex": search, "$options": "i"}},
             {"certificate_id": {"$regex": search, "$options": "i"}},
         ]
-    # FIX: Use event_certificates_col instead of certificates_col
     certs = await event_certificates_col.find(query).sort("issued_at", -1).to_list(length=100)
+    result = []
     for c in certs:
         c["_id"] = str(c["_id"])
-    return certs
+        c["recipient_name"] = c.get("participant_name") or ""
+        c["type"] = c.get("achievement_type") or "Participation"
+        c["issued_on"] = c.get("issued_date") or ""
+        c["status"] = c.get("status") or "Issued"
+        team_id = c.get("team_id")
+        if team_id and not c.get("team_name"):
+            try:
+                team_doc = await teams_col.find_one({"_id": ObjectId(team_id)})
+                if team_doc:
+                    c["team_name"] = team_doc.get("team_name") or team_doc.get("name") or ""
+            except Exception:
+                pass
+        c["team_name"] = c.get("team_name") or ""
+        result.append(c)
+    return result
 
 
 # Template Builder Endpoints

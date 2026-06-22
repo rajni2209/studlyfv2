@@ -271,7 +271,7 @@ def get_team_invite_template(
     max_team_size: int | None = None,
     organization_name: str = "Studlyf",
 ):
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
     join_url = f"{frontend_url}/events/join-team?code={invite_code}"
     return _email_shell(
         f"Team Invitation: {_safe_text(event_name)}",
@@ -364,7 +364,7 @@ def get_shortlist_template(team_name: str, event_name: str, stage_name: str = "n
                 
                 <p style="text-align: center; color: #4b5563; font-size: 14px;">This is a significant milestone. Please check your Event Hub for updated deadlines and submission requirements for this new stage.</p>
                 <div style="text-align: center; margin-top: 30px;">
-                    <a href="{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/dashboard/learner" style="background-color: #111827; color: white; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 13px; display: inline-block;">GO TO EVENT HUB</a>
+                    <a href="{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/dashboard/learner" style="background-color: #111827; color: white; padding: 14px 28px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 13px; display: inline-block;">GO TO EVENT HUB</a>
                 </div>
             </div>
         </body>
@@ -419,7 +419,7 @@ def get_certificate_template(user_name: str, event_name: str, rank: str = None, 
                                 </div>
 
                                 <div style="text-align: center; margin-top: 30px;">
-                                    <a href="{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/dashboard/learner" style="background-color: #7C3AED; color: white; padding: 16px 36px; border-radius: 14px; text-decoration: none; font-weight: 800; font-size: 13px; display: inline-block; text-transform: uppercase; letter-spacing: 0.12em; box-shadow: 0 4px 15px rgba(124,58,237,0.4);">
+                                    <a href="{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/dashboard/learner" style="background-color: #7C3AED; color: white; padding: 16px 36px; border-radius: 14px; text-decoration: none; font-weight: 800; font-size: 13px; display: inline-block; text-transform: uppercase; letter-spacing: 0.12em; box-shadow: 0 4px 15px rgba(124,58,237,0.4);">
                                         View My Certificate
                                     </a>
                                 </div>
@@ -903,7 +903,7 @@ async def send_course_purchase_email(to_email: str, student_name: str, course_na
                                 <table width="100%" border="0" cellspacing="0" cellpadding="0">
                                     <tr>
                                         <td align="center">
-                                            <a href="{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/dashboard/learner" style="display: inline-block; background: #7C3AED; color: #FFFFFF; text-decoration: none; padding: 16px 32px; border-radius: 12px; font-weight: 800; font-size: 16px; letter-spacing: 0.5px;">Start Learning Now</a>
+                                            <a href="{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/dashboard/learner" style="display: inline-block; background: #7C3AED; color: #FFFFFF; text-decoration: none; padding: 16px 32px; border-radius: 12px; font-weight: 800; font-size: 16px; letter-spacing: 0.5px;">Start Learning Now</a>
                                         </td>
                                     </tr>
                                 </table>

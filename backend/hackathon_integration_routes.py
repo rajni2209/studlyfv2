@@ -96,7 +96,7 @@ async def _send_activation_email(institution_id: str, plan_id: str, provider: st
         except Exception:
             pass
 
-        frontend_url = os.getenv('FRONTEND_URL') or os.getenv('BASE_URL') or '#'
+        frontend_url = os.getenv('FRONTEND_URL', 'https://studlyf.in')
 
         await send_template_email(
             template_type="plan_activation",

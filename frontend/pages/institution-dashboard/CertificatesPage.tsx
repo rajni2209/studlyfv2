@@ -11,14 +11,21 @@ interface EventItem { _id: string; title: string; stages?: EventStage[] }
 interface CertStats { total: number; achievement: number; participation: number; verified_today: number; pending: number; revoked: number }
 interface EligibilityPreview { winner_teams: { count: number; recipients: number }; runner_up_teams: { count: number; recipients: number }; finalist_teams: { count: number; recipients: number }; participation_eligible: { count: number }; non_qualifier_participants?: { count: number } }
 interface CertificateRecord {
-  _id: string; certificate_id?: string; recipient_name?: string; student_name?: string;
-  team_name?: string; event_title?: string; stage_name?: string; type?: string; category?: string;
-  issued_on?: string; issue_date?: string; status?: string; verification_code?: string; email?: string;
+  _id: string; certificate_id?: string; recipient_name?: string; student_name?: string; participant_name?: string;
+  team_name?: string; event_title?: string; stage_name?: string; type?: string; category?: string; achievement_type?: string; achievement_key?: string;
+  issued_on?: string; issue_date?: string; issued_date?: string; status?: string; verification_code?: string; email?: string;
 }
+
+const parseDate = (d?: string) => {
+  if (!d) return undefined;
+  const dt = new Date(d);
+  return isNaN(dt.getTime()) ? undefined : dt;
+};
 
 const formatDate = (d?: string) => {
   if (!d) return { date: '-', time: '' };
-  const dt = new Date(d);
+  const dt = parseDate(d);
+  if (!dt) return { date: d, time: '' };
   return {
     date: dt.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
     time: dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
@@ -54,6 +61,8 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCertificate, setSelectedCertificate] = useState<CertificateRecord | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
 
   // New States for Eligibility and Wizard Progress
   const [showEligibleModal, setShowEligibleModal] = useState(false);
@@ -350,18 +359,21 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
   }, [selectedEvent, selectedStage, institutionId]);
 
   const filteredRegistry = registry.filter((c) => {
-    const matchesTab = activeTab === 'All Certificates' ||
-      (activeTab === 'Achievement' && (c.type || c.category || '').toLowerCase().includes('achiev')) ||
-      (activeTab === 'Participation' && (c.type || c.category || '').toLowerCase().includes('partic')) ||
+    const aKey = (c.achievement_key || c.type || c.category || '').toLowerCase();
+    const tabMatch = activeTab === 'All Certificates' ||
+      (activeTab === 'Achievement' && aKey !== 'participation' && aKey !== '') ||
+      (activeTab === 'Participation' && aKey === 'participation') ||
       (activeTab === 'Issued' && (c.status || '').toLowerCase() === 'issued') ||
       (activeTab === 'Pending' && (c.status || '').toLowerCase() === 'pending') ||
       (activeTab === 'Revoked' && (c.status || '').toLowerCase() === 'revoked');
+    const typeMatch = !filterType || aKey === filterType.toLowerCase();
+    const statusMatch = !filterStatus || (c.status || '').toLowerCase() === filterStatus.toLowerCase();
     const q = searchTerm.toLowerCase();
     const matchesSearch = !q ||
       (c.certificate_id || '').toLowerCase().includes(q) ||
-      (c.recipient_name || c.student_name || '').toLowerCase().includes(q) ||
+      (c.recipient_name || c.participant_name || c.student_name || '').toLowerCase().includes(q) ||
       (c.team_name || '').toLowerCase().includes(q);
-    return matchesTab && matchesSearch;
+    return tabMatch && typeMatch && statusMatch && matchesSearch;
   });
 
   const itemsPerPage = 10;
@@ -370,7 +382,7 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [activeTab, searchTerm, selectedEvent, selectedStage]);
+  }, [activeTab, searchTerm, filterType, filterStatus, selectedEvent, selectedStage]);
 
   const rules = [
     { icon: <Trophy className="w-4 h-4 text-slate-400" />, label: 'Winner', value: 'Top 1 Team' },
@@ -441,21 +453,46 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
         <div className="flex flex-col">
           <label className="text-xs font-semibold text-slate-500 mb-1">Certificate Category</label>
           <div className="relative">
-            <select className="w-full appearance-none bg-white border border-slate-200 text-sm rounded-md py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-600"><option>All Certificates</option></select>
+            <select className="w-full appearance-none bg-white border border-slate-200 text-sm rounded-md py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value)}>
+              <option>All Certificates</option>
+              <option>Achievement</option>
+              <option>Participation</option>
+              <option>Issued</option>
+              <option>Pending</option>
+              <option>Revoked</option>
+            </select>
             <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2 top-2.5 pointer-events-none" />
           </div>
         </div>
         <div className="flex flex-col">
           <label className="text-xs font-semibold text-slate-500 mb-1">Certificate Type</label>
           <div className="relative">
-            <select className="w-full appearance-none bg-white border border-slate-200 text-sm rounded-md py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-600"><option>All Types</option></select>
+            <select className="w-full appearance-none bg-white border border-slate-200 text-sm rounded-md py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}>
+              <option value="">All Types</option>
+              <option value="winner">Winner</option>
+              <option value="runner_up">Runner Up</option>
+              <option value="finalist">Finalist</option>
+              <option value="participation">Participation</option>
+            </select>
             <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2 top-2.5 pointer-events-none" />
           </div>
         </div>
         <div className="flex flex-col">
           <label className="text-xs font-semibold text-slate-500 mb-1">Status</label>
           <div className="relative">
-            <select className="w-full appearance-none bg-white border border-slate-200 text-sm rounded-md py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-600"><option>All Status</option></select>
+            <select className="w-full appearance-none bg-white border border-slate-200 text-sm rounded-md py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}>
+              <option value="">All Status</option>
+              <option value="Issued">Issued</option>
+              <option value="Pending">Pending</option>
+              <option value="Revoked">Revoked</option>
+              <option value="Verified">Verified</option>
+            </select>
             <ChevronDown className="w-4 h-4 text-slate-400 absolute right-2 top-2.5 pointer-events-none" />
           </div>
         </div>
@@ -630,14 +667,15 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
                       <tr><td colSpan={8} className="py-16 text-center text-slate-400 text-sm font-medium">No certificates found</td></tr>
                     ) : (
                       currentRegistry.map((c) => {
-                        const ft = formatDate(c.issued_on || c.issue_date);
-                        const name = c.recipient_name || c.student_name || '-';
-                        const certType = c.type || c.category || 'Participation';
+                        const ft = formatDate(c.issued_on || c.issued_date || c.issue_date);
+                        const name = c.recipient_name || c.participant_name || c.student_name || '-';
+                        const certType = c.type || c.achievement_type || c.category || 'Participation';
                         const stageName = c.stage_name || selectedStage?.name || '-';
+                        const email = c.email || '';
                         return (
                           <tr key={c._id} className="border-b border-slate-100 hover:bg-slate-50">
                             <td className="py-3 px-4 text-xs font-medium text-slate-800">{c.certificate_id || c._id.slice(-8)}</td>
-                            <td className="py-3 px-4"><div className="text-xs font-semibold">{name}</div><div className="text-[10px] text-slate-500">{c.email || ''}</div></td>
+                            <td className="py-3 px-4"><div className="text-xs font-semibold">{name}</div><div className="text-[10px] text-slate-500">{email}</div></td>
                             <td className="py-3 px-4 text-xs">{c.team_name || '-'}</td>
                             <td className="py-3 px-4 text-xs flex items-center mt-2">{typeIcon(certType)}{certType}</td>
                             <td className="py-3 px-4 text-xs"><div>{ft.date}</div>{ft.time && <div className="text-[10px] text-slate-500">{ft.time}</div>}</td>
@@ -691,11 +729,11 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
                         <h4 className="text-[10px] font-serif uppercase tracking-widest text-slate-800">Certificate</h4>
                         <div className="text-[6px] text-slate-500 uppercase tracking-wider mb-2">Of Achievement</div>
                         <div className="w-full border-b border-slate-300 my-1" />
-                        <div className="font-serif text-xl italic font-bold my-1 text-center truncate w-full px-2" title={certToPreview.recipient_name || certToPreview.student_name || 'Recipient Name'}>
-                          {certToPreview.recipient_name || certToPreview.student_name || 'Recipient Name'}
+                        <div className="font-serif text-xl italic font-bold my-1 text-center truncate w-full px-2" title={certToPreview.recipient_name || certToPreview.participant_name || certToPreview.student_name || 'Recipient Name'}>
+                          {certToPreview.recipient_name || certToPreview.participant_name || certToPreview.student_name || 'Recipient Name'}
                         </div>
                         <div className="w-full border-b border-slate-300 my-1 mb-2" />
-                        <div className="text-[8px] font-semibold">{certToPreview.type || certToPreview.category || 'Achievement'}</div>
+                        <div className="text-[8px] font-semibold">{certToPreview.type || certToPreview.achievement_type || certToPreview.category || 'Achievement'}</div>
                         <div className="absolute bottom-2 right-2 flex flex-col items-center">
                           <img src={`https://api.qrserver.com/v1/create-qr-code/?size=50x50&data=${certToPreview.verification_code || certToPreview.certificate_id || 'dummy'}`} alt="QR Code" className="w-6 h-6 mb-1" />
                         </div>
@@ -706,9 +744,9 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
                       <div className="bg-slate-50 rounded-lg p-3 border border-slate-100">
                         <h4 className="text-xs font-semibold mb-2">Verification Preview</h4>
                         <div className="space-y-2 text-xs">
-                          <div className="flex justify-between"><span className="text-slate-500">Certificate ID</span><span className="font-mono font-medium">{certToPreview.certificate_id || certToPreview._id?.slice(-8) || '---'}</span></div>
-                          <div className="flex justify-between"><span className="text-slate-500">Verification Code</span><span className="font-mono font-medium">{certToPreview.verification_code || certToPreview.certificate_id?.slice(-8) || '---'}</span></div>
-                          <div className="flex justify-between items-center"><span className="text-slate-500">Status</span><span className={`px-2 py-0.5 text-[10px] font-bold rounded ${(certToPreview.status || '').toLowerCase() === 'issued' || (certToPreview.status || '').toLowerCase() === 'verified' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{certToPreview.status || 'Pending'}</span></div>
+                          <div className="flex justify-between"><span className="text-slate-500">Certificate ID</span><span className="font-mono font-medium">{certToPreview.certificate_id || '---'}</span></div>
+                          <div className="flex justify-between"><span className="text-slate-500">Verification Code</span><span className="font-mono font-medium">{certToPreview.verification_code || '---'}</span></div>
+                          <div className="flex justify-between items-center"><span className="text-slate-500">Status</span><span className={`px-2 py-0.5 text-[10px] font-bold rounded ${(certToPreview.status || '').toLowerCase() === 'issued' || (certToPreview.status || '').toLowerCase() === 'verified' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{certToPreview.status || 'Issued'}</span></div>
                         </div>
                       </div>
                       <button className="w-full mt-3 py-2 bg-indigo-600 text-white rounded-lg text-xs font-medium hover:bg-indigo-700 flex justify-center items-center" onClick={() => window.open(`/verify/${certToPreview.verification_code || certToPreview.certificate_id}`, '_blank')}>

@@ -270,7 +270,7 @@ async def approve_join_request(
             from services.platform_notification_service import notify_team_join_approved
             event = await events_col.find_one({"_id": ObjectId(join_request["event_id"])} )
             if requester and requester.get("email"):
-                frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
                 await notify_team_join_approved(
                     recipient_email=requester["email"],
                     participant_name=requester.get("full_name") or requester.get("name") or "Participant",

@@ -226,7 +226,7 @@ class InstitutionalCertificateService:
     ) -> dict:
         cert_id = generate_certificate_id(event_code)
         v_code = hashlib.sha256(f"{cert_id}:{event_id}:{user_id}".encode()).hexdigest()[:12].upper()
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
         v_url = f"{frontend_url}/verify/{cert_id}"
         qr_blob = self._generate_qr_blob(v_url)
         issue_date = datetime.utcnow().strftime("%B %d, %Y")
@@ -317,7 +317,7 @@ class InstitutionalCertificateService:
         event_date = event.get("eventDate") or event.get("start_date") or datetime.utcnow().strftime("%B %d, %Y")
         institution_id = str(event.get("institution_id", ""))
         event_code = (event.get("eventCode") or event.get("event_type") or "HACK")[:6].upper()
-        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+        frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
         template_id = template_id or event.get("template_id")
 
         template = await get_active_template(event_id, institution_id, "certificate_issued")
@@ -515,7 +515,7 @@ async def process_certificate_jobs():
             org_name = event.get("organisation") or event.get("organization") or "Unknown"
             event_date = event.get("eventDate") or event.get("start_date") or datetime.utcnow().strftime("%B %d, %Y")
             institution_id = str(event.get("institution_id", ""))
-            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+            frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
             template = await get_active_template(event_id, institution_id, "certificate_issued")
 
             cursor = participants_col.find({"event_id": event_id})

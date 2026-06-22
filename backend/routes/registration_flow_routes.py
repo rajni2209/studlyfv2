@@ -73,7 +73,7 @@ router = APIRouter(prefix="/api/v1/registration", tags=["Registration System"])
 logger = logging.getLogger("registration_flow")
 
 # Base URL for static file paths
-BASE_URL = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+BASE_URL = os.getenv("RENDER_EXTERNAL_URL", "https://api.studlyf.in")
 REG_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "uploads", "registrations")
 os.makedirs(REG_UPLOAD_DIR, exist_ok=True)
 
