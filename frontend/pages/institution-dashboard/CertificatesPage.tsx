@@ -4,6 +4,7 @@ import {
   Trophy, Medal, Award, Users, FileText, Download, Eye, Mail, MoreVertical, ExternalLink, Loader2, AlertCircle
 } from 'lucide-react';
 import { API_BASE_URL, authHeaders } from '../../apiConfig';
+import CertificateTemplateBuilder from './components/CertificateTemplateBuilder';
 
 interface EventStage { id: string; name: string }
 interface EventItem { _id: string; title: string; stages?: EventStage[] }
@@ -43,7 +44,12 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
   const [loading, setLoading] = useState(true);
   const [issuing, setIssuing] = useState(false);
   const [showIssueModal, setShowIssueModal] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [showTemplateBuilder, setShowTemplateBuilder] = useState(false);
+  const [showVerifyCertificates, setShowVerifyCertificates] = useState(false);
   const [issueResult, setIssueResult] = useState<string | null>(null);
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [activeTab, setActiveTab] = useState('All Certificates');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCertificate, setSelectedCertificate] = useState<CertificateRecord | null>(null);
@@ -61,14 +67,64 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
     setShowEligibleModal(true);
     try {
       const res = await fetch(
-        `${API_BASE_URL}/api/v1/institution/certificates/eligible-recipients?event_id=${selectedEvent._id}&stage_id=${selectedStage.id}`,
-        { method: 'POST', headers: authHeaders() }
+        `${API_BASE_URL}/api/v1/institution/certificates/eligible-recipients`,
+        {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event_id: selectedEvent._id,
+            stage_id: selectedStage.id,
+            min_score: 0,
+          })
+        }
       );
       if (res.ok) {
-        setEligibleRecipientsData(await res.json());
+        const data = await res.json();
+        // Transform backend data to frontend expected format
+        const transformedData = {
+          categories: data.categories, // Keep full categories
+          winner_teams: {
+            count: data.categories?.winner?.recipients?.length || 0,
+            recipients: data.categories?.winner?.recipients?.length || 0,
+          },
+          runner_up_teams: {
+            count: data.categories?.runner_up?.recipients?.length || 0,
+            recipients: data.categories?.runner_up?.recipients?.length || 0,
+          },
+          finalist_teams: {
+            count: data.categories?.finalist?.recipients?.length || 0,
+            recipients: data.categories?.finalist?.recipients?.length || 0,
+          },
+          participation_eligible: {
+            count: data.categories?.participation?.recipients?.length || 0,
+          },
+          non_qualifier_participants: {
+            count: data.categories?.non_qualifier_participation?.recipients?.length || 0,
+          },
+        };
+        setEligibleRecipientsData(transformedData);
+      } else {
+        const errorData = await res.json();
+        console.error('Error fetching eligible recipients:', errorData);
+        setEligibleRecipientsData({
+          winner_teams: { count: 0, recipients: 0 },
+          runner_up_teams: { count: 0, recipients: 0 },
+          finalist_teams: { count: 0, recipients: 0 },
+          participation_eligible: { count: 0 },
+          non_qualifier_participants: { count: 0 },
+          error: errorData.detail || 'Failed to fetch eligible recipients'
+        });
       }
     } catch (e) {
       console.error('Error fetching eligible recipients:', e);
+      setEligibleRecipientsData({
+        winner_teams: { count: 0, recipients: 0 },
+        runner_up_teams: { count: 0, recipients: 0 },
+        finalist_teams: { count: 0, recipients: 0 },
+        participation_eligible: { count: 0 },
+        non_qualifier_participants: { count: 0 },
+        error: e instanceof Error ? e.message : 'Failed to fetch eligible recipients'
+      });
     } finally {
       setLoadingEligible(false);
     }
@@ -83,8 +139,16 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
     try {
       // 1. Fetch eligible recipients for the selected stage and event
       const eligibleRes = await fetch(
-        `${API_BASE_URL}/api/v1/institution/certificates/eligible-recipients?event_id=${selectedEvent._id}&stage_id=${selectedStage.id}`,
-        { method: 'POST', headers: authHeaders() }
+        `${API_BASE_URL}/api/v1/institution/certificates/eligible-recipients`,
+        {
+          method: 'POST',
+          headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event_id: selectedEvent._id,
+            stage_id: selectedStage.id,
+            min_score: 0,
+          })
+        }
       );
       
       if (!eligibleRes.ok) {
@@ -101,7 +165,7 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
         const cat = categories[catKey];
         if (!cat || !cat.recipients || cat.recipients.length === 0) return 0;
         
-        // Map recipients to their respective IDs (for qualifiers, use submission_id; for non-qualifiers, user_id)
+        // Map recipients to their respective IDs
         const recipientIds = cat.recipients.map((r: any) => r.submission_id || r.user_id || r.participant_id).filter(Boolean);
         if (recipientIds.length === 0) return 0;
         
@@ -109,13 +173,17 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
         
         const params = new URLSearchParams();
         params.append("event_id", selectedEvent._id);
-        recipientIds.forEach((id: string) => params.append("recipient_ids", id));
         params.append("achievement_type", achievementType);
         params.append("send_email", "true");
+        if (selectedTemplateId) params.append("template_id", selectedTemplateId); // <-- PASSED TEMPLATE ID
         
         const issueRes = await fetch(
           `${API_BASE_URL}/api/v1/institution/certificates/issue?${params.toString()}`,
-          { method: 'POST', headers: authHeaders() }
+          {
+            method: 'POST',
+            headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+            body: JSON.stringify({ recipient_ids: recipientIds })
+          }
         );
         
         if (issueRes.ok) {
@@ -152,13 +220,92 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
       if (statsRes.ok) setStats(await statsRes.json());
       if (regRes.ok) setRegistry(await regRes.json());
       
-    } catch (err: any) {
-      setIssueResult(err.message || 'Error issuing certificates');
-    } finally {
-      setIssuing(false);
-      setIssuingProgress(null);
+      } catch (err: any) {
+        setIssueResult(err.message || 'Error issuing certificates');
+      } finally {
+        setIssuing(false);
+        setIssuingProgress(null);
+      }
+    };
+
+  // Template Builder Functions
+  const fetchTemplates = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/institution/certificates/templates`, { headers: authHeaders() });
+      if (res.ok) {
+        const templatesData = await res.json();
+        setTemplates(templatesData);
+      }
+    } catch (e) {
+      console.error('Error fetching templates:', e);
     }
   };
+
+  const selectTemplate = (template: any) => {
+    setSelectedTemplate(template);
+  };
+
+  const updateTemplate = (updatedTemplate: any) => {
+    setTemplates(templates.map(t => t.id === updatedTemplate.id ? updatedTemplate : t));
+    setSelectedTemplate(updatedTemplate);
+  };
+
+  const saveTemplate = async () => {
+    if (!selectedTemplate) return;
+    
+    try {
+      const method = selectedTemplate.id ? 'PUT' : 'POST';
+      const url = selectedTemplate.id 
+        ? `${API_BASE_URL}/api/v1/certificates/templates/${selectedTemplate.id}`
+        : `${API_BASE_URL}/api/v1/certificates/templates`;
+      
+      const res = await fetch(url, {
+        method,
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedTemplate)
+      });
+      
+      if (res.ok) {
+        const savedTemplate = await res.json();
+        setTemplates(templates.map(t => t.id === savedTemplate.id ? savedTemplate : t));
+        setSelectedTemplate(savedTemplate);
+        setIssueResult('Template saved successfully!');
+      } else {
+        const error = await res.json();
+        setIssueResult(`Error saving template: ${error.detail || 'Unknown error'}`);
+      }
+    } catch (e) {
+      console.error('Error saving template:', e);
+      setIssueResult('Error saving template');
+    }
+  };
+
+  const deleteTemplate = async (templateId: string) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/certificates/templates/${templateId}`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
+      
+      if (res.ok) {
+        setTemplates(templates.filter(t => t.id !== templateId));
+        if (selectedTemplate?.id === templateId) {
+          setSelectedTemplate(null);
+        }
+        setIssueResult('Template deleted successfully!');
+      }
+    } catch (e) {
+      console.error('Error deleting template:', e);
+      setIssueResult('Error deleting template');
+    }
+  };
+
+  // Fetch templates when event/stage changes
+  useEffect(() => {
+    if (selectedEvent && selectedStage) {
+      fetchTemplates();
+    }
+  }, [selectedEvent, selectedStage]);
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -242,8 +389,14 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
           <p className="text-sm text-slate-500 mt-1">Create, manage and issue certificates for events and participants.</p>
         </div>
         <div className="flex space-x-3">
-          <button className="flex items-center px-4 py-2 border border-indigo-600 text-indigo-600 bg-white rounded-md hover:bg-indigo-50 font-medium text-sm"><FileText className="w-4 h-4 mr-2" /> Template Builder</button>
-          <button className="flex items-center px-4 py-2 border border-indigo-600 text-indigo-600 bg-white rounded-md hover:bg-indigo-50 font-medium text-sm"><CheckCircle className="w-4 h-4 mr-2" /> Verify Certificates</button>
+          <button
+            onClick={() => setShowTemplateBuilder(true)}
+            className="flex items-center px-4 py-2 border border-indigo-600 text-indigo-600 bg-white rounded-md hover:bg-indigo-50 font-medium text-sm"
+          ><FileText className="w-4 h-4 mr-2" /> Template Builder</button>
+          <button
+            onClick={() => setShowVerifyCertificates(true)}
+            className="flex items-center px-4 py-2 border border-indigo-600 text-indigo-600 bg-white rounded-md hover:bg-indigo-50 font-medium text-sm"
+          ><CheckCircle className="w-4 h-4 mr-2" /> Verify Certificates</button>
           <button
             onClick={() => setShowIssueModal(true)}
             disabled={!selectedEvent || issuing}
@@ -321,6 +474,11 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
 
       {loading ? (
         <div className="flex items-center justify-center py-24"><Loader2 className="w-8 h-8 animate-spin text-indigo-600" /></div>
+      ) : showTemplateBuilder ? (
+        <div className="fixed inset-0 z-50 bg-white p-8 overflow-y-auto">
+          <button onClick={() => setShowTemplateBuilder(false)} className="mb-4 flex items-center text-sm text-slate-500 hover:text-indigo-600"><XCircle className="w-4 h-4 mr-2" /> Back to Dashboard</button>
+          <CertificateTemplateBuilder templates={templates} onSelect={selectTemplate} onUpdate={updateTemplate} onSave={saveTemplate} onDelete={deleteTemplate} selectedTemplate={selectedTemplate} />
+        </div>
       ) : (
         <>
           {/* 3 Cards */}
@@ -591,6 +749,23 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
                 </div>
                 <div className="p-6 space-y-3">
                   <p className="text-sm text-slate-600 mb-2">Select which certificates to issue for <strong>{selectedEvent?.title}</strong> - stage: <strong>{selectedStage?.name}</strong>:</p>
+                  
+                  {/* Template Selector */}
+                  <div className="mb-4">
+                    <label className="text-xs font-semibold text-slate-500 mb-1">Select Certificate Template</label>
+                    <select
+                      className="w-full appearance-none bg-white border border-slate-200 text-sm rounded-md py-2 pl-3 pr-8 focus:outline-none focus:ring-1 focus:ring-indigo-600"
+                      value={selectedTemplateId}
+                      onChange={(e) => setSelectedTemplateId(e.target.value)}
+                    >
+                      <option value="">Default Template</option>
+                      {Array.from(new Map(templates.map((t: any) => [t.id || t.template_id, t])).values()).map((t: any) => (
+                        <option key={t.id || t.template_id} value={t.id || t.template_id}>
+                          {t.name || 'Untitled Template'}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   
                   {/* Option 1: Ranked Winners & Finalists */}
                   <button

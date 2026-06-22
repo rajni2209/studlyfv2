@@ -43,6 +43,25 @@ async def create_template(template: CertificateTemplate, user: dict = Depends(ge
     await db.certificate_templates.insert_one(template_dict)
     return template
 
+@router.get("/", response_model=List[CertificateTemplate])
+async def list_templates(user: dict = Depends(get_auth_user)):
+    institution_id = user.get("institution_id")
+    if not institution_id:
+        raise HTTPException(status_code=400, detail="Institution ID required")
+    
+    # Fetch prebuilt templates OR templates owned by this institution
+    cursor = db.certificate_templates.find({
+        "is_deleted": False,
+        "$or": [
+            {"template_source": TemplateSource.PREBUILT},
+            {"institution_id": institution_id}
+        ]
+    })
+    
+    templates = await cursor.to_list(length=100)
+    return templates
+
+
 @router.patch("/{template_id}/status")
 async def update_status(template_id: str, status: TemplateStatus, user: dict = Depends(get_auth_user)):
     tmpl = await get_template_or_404(template_id, user)

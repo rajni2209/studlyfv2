@@ -2740,7 +2740,7 @@ async def fetch_event_results(event_id: str):
     }
 
 @router.get("/leaderboard/{event_id}/export-pdf")
-async def export_leaderboard_pdf(event_id: str):
+async def export_leaderboard_pdf(event_id: str, stage_id: str = None):
     """
     Generates a professional PDF report with ranked results 
     and detailed dimension-based breakdowns.
@@ -2750,8 +2750,10 @@ async def export_leaderboard_pdf(event_id: str):
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from io import BytesIO
-    from db import leaderboard_col, events_col
-    
+    from db import leaderboard_col, events_col, teams_col
+    from bson import ObjectId
+    from fastapi.responses import Response
+
     if event_id == "active_event":
         event = await events_col.find_one({"status": "Live"}, sort=[("created_at", -1)])
         if not event: event = await events_col.find_one({}, sort=[("created_at", -1)])
@@ -2759,7 +2761,12 @@ async def export_leaderboard_pdf(event_id: str):
 
     # 1. Fetch Data
     event = await events_col.find_one({"_id": ObjectId(event_id)})
-    rankings = await leaderboard_col.find({"event_id": event_id}).sort("rank", 1).to_list(None)
+    
+    query = {"event_id": event_id}
+    if stage_id:
+        query["stage_id"] = stage_id
+        
+    rankings = await leaderboard_col.find(query).sort("rank", 1).to_list(None)
     
     # 2. Create PDF Buffer
     buffer = BytesIO()
@@ -2777,12 +2784,21 @@ async def export_leaderboard_pdf(event_id: str):
         alignment=1 # Center
     )
     elements.append(Paragraph(f"{event.get('title', 'Event Results')}", title_style))
-    elements.append(Paragraph(f"Official Leaderboard & Performance Report", styles['Heading3']))
+    elements.append(Paragraph(f"Official Leaderboard & Performance Report - Stage: {stage_id or 'All'}", styles['Heading3']))
     elements.append(Spacer(1, 20))
     
     # 4. Table Data
-    data = [["Rank", "Team Name", "Score Breakdown", "Final Score"]]
+    data = [["Rank", "Team/Members", "Score Breakdown", "Final Score"]]
     for r in rankings:
+        # Fetch team members if it's a team
+        team_name = r.get('team_name', 'Solo Entry')
+        members_str = team_name
+        if r.get('team_id'):
+            team = await teams_col.find_one({"_id": ObjectId(r['team_id'])})
+            if team and team.get('members'):
+                member_names = [m.get('name', 'Member') for m in team['members']]
+                members_str = f"{team_name}\n({', '.join(member_names)})"
+        
         # Format criteria breakdown as a string
         breakdown_str = ""
         if r.get("criteria_scores"):
@@ -2792,7 +2808,7 @@ async def export_leaderboard_pdf(event_id: str):
         
         data.append([
             f"#{r['rank']}",
-            r['team_name'],
+            members_str,
             breakdown_str,
             str(r['total_score'])
         ])
