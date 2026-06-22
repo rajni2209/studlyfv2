@@ -4,8 +4,11 @@ from auth_institution import get_auth_user
 from bson import ObjectId
 from typing import Optional, List
 from datetime import datetime
+import os
 import uuid
 from services.institutional_certificate_service import certificate_service, ACHIEVEMENT_TYPES, VALID_ACHIEVEMENTS
+from services.email_service import send_notification_email, get_certificate_issued_template
+from services.email_template_service import get_active_template, render_template
 
 router = APIRouter(prefix="/api/v1/institution/certificates", tags=["Achievement Registry"])
 
@@ -273,6 +276,39 @@ async def issue_certificates(
             template_id=template_id, # ADDED
         )
         issued.append(record)
+
+        if send_email:
+            try:
+                user_doc = await users_col.find_one({"user_id": user_id})
+                recipient_email = (user_doc or {}).get("email", "")
+                if recipient_email:
+                    template = await get_active_template(event_id, institution_id, "certificate_issued")
+                    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                    context = {
+                        "participant_name": participant_name,
+                        "event_title": event_title,
+                        "organization_name": org_name,
+                        "event_date": event_date,
+                        "certificate_id": record["certificate_id"],
+                        "issued_date": record["issued_date"],
+                        "certificate_download_link": f"{frontend_url}/api/v1/institution/download-certificate/{record['certificate_id']}",
+                        "verification_url": record["verification_url"],
+                    }
+                    subj, body = render_template(template, context) if template else (
+                        f"Certificate Issued: {event_title}",
+                        get_certificate_issued_template(
+                            participant_name=participant_name,
+                            event_title=event_title,
+                            organization_name=org_name,
+                            certificate_id=record["certificate_id"],
+                            issued_date=record["issued_date"],
+                            certificate_download_link=f"{frontend_url}/api/v1/institution/download-certificate/{record['certificate_id']}",
+                            verification_url=record["verification_url"],
+                        ),
+                    )
+                    await send_notification_email(recipient_email, subj, body)
+            except Exception as e:
+                print(f"[CERT EMAIL FAIL] {user_id}: {e}")
 
     return {
         "status": "success",

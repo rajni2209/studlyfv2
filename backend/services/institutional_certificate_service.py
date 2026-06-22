@@ -403,7 +403,7 @@ class InstitutionalCertificateService:
                         "event_date": event_date,
                         "certificate_id": record["certificate_id"],
                         "issued_date": record["issued_date"],
-                        "certificate_download_link": f"{frontend_url}/certificates/certificate_{record['certificate_id']}.pdf",
+                        "certificate_download_link": f"{frontend_url}/api/v1/institution/download-certificate/{record['certificate_id']}",
                         "verification_url": record["verification_url"],
                     }
                     subj, body = render_template(template, context) if template else (
@@ -414,7 +414,7 @@ class InstitutionalCertificateService:
                             organization_name=org_name,
                             certificate_id=record["certificate_id"],
                             issued_date=record["issued_date"],
-                            certificate_download_link=f"{frontend_url}/certificates/certificate_{record['certificate_id']}.pdf",
+                            certificate_download_link=f"{frontend_url}/api/v1/institution/download-certificate/{record['certificate_id']}",
                             verification_url=record["verification_url"],
                         ),
                     )
@@ -582,7 +582,7 @@ async def process_certificate_jobs():
 
                 try:
                     pemail = (puser or {}).get("email", "").strip()
-                    if pemail and template:
+                    if pemail:
                         context = {
                             "participant_name": pname,
                             "event_title": event_title,
@@ -590,10 +590,23 @@ async def process_certificate_jobs():
                             "event_date": event_date,
                             "certificate_id": cert_id,
                             "issued_date": issue_date,
-                            "certificate_download_link": f"{frontend_url}/certificates/certificate_{cert_id}.pdf",
+                            "certificate_download_link": f"{frontend_url}/api/v1/institution/download-certificate/{cert_id}",
                             "verification_url": v_url,
                         }
-                        subj, body = render_template(template, context)
+                        if template:
+                            subj, body = render_template(template, context)
+                        else:
+                            from services.email_service import get_certificate_issued_template
+                            subj = f"Certificate Issued: {event_title}"
+                            body = get_certificate_issued_template(
+                                participant_name=pname,
+                                event_title=event_title,
+                                organization_name=org_name,
+                                certificate_id=cert_id,
+                                issued_date=issue_date,
+                                certificate_download_link=f"{frontend_url}/api/v1/institution/download-certificate/{cert_id}",
+                                verification_url=v_url,
+                            )
                         pending_email_jobs.append((pemail, subj, body))
                 except Exception as e:
                     print(f"[CERT BG EMAIL FAIL] {pid}: {e}")

@@ -374,7 +374,8 @@ async def list_selections(user: dict = Depends(get_auth_user)):
         {"$addFields": {
             "problem_title": "$problem.title",
             "domain": "$problem.domain",
-            "ps_code": "$problem.ps_code"
+            "ps_code": "$problem.ps_code",
+            "problem_id": {"$toString": "$problem._id"}
         }},
         {"$project": {"problem": 0}}
     ]
@@ -436,7 +437,7 @@ async def select_problem(
         raise HTTPException(409, "This team lead has already selected a problem")
 
     selection = {
-        "problem_id": problem_id,
+        "problem_id": problem.get("problem_id", problem_id),
         "team_name": body.get("team_name", ""),
         "team_lead_name": body.get("team_lead_name", ""),
         "team_lead_email": team_lead_email,
