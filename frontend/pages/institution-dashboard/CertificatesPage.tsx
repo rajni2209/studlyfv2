@@ -345,7 +345,7 @@ const CertificatesPage: React.FC<{ institutionId: string }> = ({ institutionId }
       setLoading(true);
       try {
         const [statsRes, regRes] = await Promise.all([
-          fetch(`${API_BASE_URL}/api/v1/institution/certificates/stats?institution_id=${institutionId}`, { headers: authHeaders() }),
+          fetch(`${API_BASE_URL}/api/v1/institution/certificates/stats?institution_id=${institutionId}&event_id=${selectedEvent._id}${selectedStage ? `&stage_id=${selectedStage.id}` : ''}`, { headers: authHeaders() }),
           fetch(`${API_BASE_URL}/api/v1/institution/certificates/registry?institution_id=${institutionId}&event_id=${selectedEvent._id}${selectedStage ? `&stage_id=${selectedStage.id}` : ''}`, { headers: authHeaders() }),
         ]);
         if (statsRes.ok) setStats(await statsRes.json());

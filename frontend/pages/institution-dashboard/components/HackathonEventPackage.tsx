@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { API_BASE_URL, authHeaders } from '../../../apiConfig';
 import {
-    Code2, Plus, Search, Users, Layers, X, Edit3, Trash2, AlertCircle, CheckCircle, Lightbulb
+    Code2, Plus, Search, Users, Layers, X, Edit3, Trash2, AlertCircle, CheckCircle, Lightbulb, Save, Image, Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -43,8 +43,8 @@ const emptyForm = {
     title: '', domain: '', description: '', tech_stack: '', ps_code: '', brief: '', max_teams: 5
 };
 
-export default function HackathonEventPackage({ institutionId }: HackathonEventPackageProps) {
-    const [activeTab, setActiveTab] = useState<'problems' | 'selections'>('problems');
+export default function HackathonEventPackage({ institutionId, eventId }: HackathonEventPackageProps) {
+    const [activeTab, setActiveTab] = useState<'problems' | 'selections' | 'sponsors'>('problems');
     const [problems, setProblems] = useState<Problem[]>([]);
     const [selections, setSelections] = useState<Selection[]>([]);
     const [form, setForm] = useState({ ...emptyForm });
@@ -52,11 +52,27 @@ export default function HackathonEventPackage({ institutionId }: HackathonEventP
     const [selFilter, setSelFilter] = useState<string | 'all'>('all');
     const [error, setError] = useState('');
     const [search, setSearch] = useState('');
+    const [sponsors, setSponsors] = useState<{ name: string; logo: string }[]>([]);
+    const [savingSponsors, setSavingSponsors] = useState(false);
+    const [sponsorsLoaded, setSponsorsLoaded] = useState(false);
 
     useEffect(() => {
         loadProblems();
         loadSelections();
+        loadSponsors();
     }, []);
+
+    const loadSponsors = async () => {
+        if (!eventId) return;
+        try {
+            const r = await fetch(`${API_BASE_URL}/api/v1/institution/events/${eventId}`, { headers: authHeaders() });
+            if (r.ok) {
+                const ev = await r.json();
+                if (Array.isArray(ev.sponsors)) setSponsors(ev.sponsors);
+            }
+        } catch {}
+        setSponsorsLoaded(true);
+    };
 
     const api = (path: string, options?: RequestInit) =>
         fetch(`${API_BASE_URL}/api/v1/institution/hackathon${path}`, {
@@ -164,6 +180,17 @@ export default function HackathonEventPackage({ institutionId }: HackathonEventP
                 >
                     <Users size={16} />
                     Selections
+                </button>
+                <button
+                    onClick={() => setActiveTab('sponsors')}
+                    className={`px-5 py-2.5 rounded-full font-bold text-sm transition-all cursor-pointer flex items-center gap-2 ${
+                        activeTab === 'sponsors'
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'bg-white border border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                >
+                    <Image size={16} />
+                    Sponsors
                 </button>
             </div>
 
@@ -348,6 +375,89 @@ export default function HackathonEventPackage({ institutionId }: HackathonEventP
                                 </tbody>
                             </table>
                         </div>
+                    )}
+                </div>
+            )}
+
+            {activeTab === 'sponsors' && (
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <div>
+                            <h4 className="text-base font-bold text-slate-900">Sponsor Logos</h4>
+                            <p className="text-xs text-slate-400 mt-1">These appear on the Participant Card and poster for this event.</p>
+                        </div>
+                        <button
+                            onClick={() => setSponsors([...sponsors, { name: '', logo: '' }])}
+                            className="px-3 py-1.5 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                            <Plus size={14} /> Add Sponsor
+                        </button>
+                    </div>
+                    <div className="space-y-3">
+                        {sponsors.length === 0 && (
+                            <div className="text-center py-12 text-slate-400 font-medium text-sm">
+                                <Image size={36} className="mx-auto mb-2 text-slate-200" />
+                                No sponsors added yet
+                            </div>
+                        )}
+                        {sponsors.map((s, i) => (
+                            <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                {s.logo && (
+                                    <img src={s.logo} alt={s.name} className="w-10 h-10 rounded-lg object-contain bg-white border border-slate-200 shrink-0" />
+                                )}
+                                <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <input
+                                        value={s.name}
+                                        onChange={(e) => {
+                                            const next = [...sponsors];
+                                            next[i] = { ...next[i], name: e.target.value };
+                                            setSponsors(next);
+                                        }}
+                                        placeholder="Company name"
+                                        className="p-2 rounded-lg border border-slate-200 bg-white text-sm outline-none"
+                                    />
+                                    <input
+                                        value={s.logo}
+                                        onChange={(e) => {
+                                            const next = [...sponsors];
+                                            next[i] = { ...next[i], logo: e.target.value };
+                                            setSponsors(next);
+                                        }}
+                                        placeholder="Logo URL"
+                                        className="p-2 rounded-lg border border-slate-200 bg-white text-sm outline-none"
+                                    />
+                                </div>
+                                <button
+                                    onClick={() => setSponsors(sponsors.filter((_, j) => j !== i))}
+                                    className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    {sponsors.length > 0 && sponsorsLoaded && (
+                        <button
+                            onClick={async () => {
+                                setSavingSponsors(true);
+                                try {
+                                    await fetch(`${API_BASE_URL}/api/v1/institution/events/${eventId}`, {
+                                        method: 'PUT',
+                                        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ sponsors }),
+                                    });
+                                } catch (e) {
+                                    console.error('Failed to save sponsors', e);
+                                } finally {
+                                    setSavingSponsors(false);
+                                }
+                            }}
+                            disabled={savingSponsors}
+                            className="mt-4 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center gap-1 disabled:opacity-60 cursor-pointer"
+                        >
+                            {savingSponsors ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                            Save Sponsors
+                        </button>
                     )}
                 </div>
             )}

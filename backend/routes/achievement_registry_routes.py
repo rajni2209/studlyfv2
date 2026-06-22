@@ -84,12 +84,22 @@ async def _get_leaderboard_for_event(event_id: str, stage_id: str | None = None)
 
 
 @router.get("/stats")
-async def get_certificate_stats(institution_id: str, user: dict = Depends(get_auth_user)):
+async def get_certificate_stats(
+    institution_id: str,
+    event_id: Optional[str] = None,
+    stage_id: Optional[str] = None,
+    user: dict = Depends(get_auth_user),
+):
+    match: dict = {"institution_id": institution_id}
+    if event_id:
+        match["event_id"] = event_id
+    if stage_id:
+        match["stage_id"] = stage_id
     achievement_keys = ["winner", "runner_up", "second_runner_up", "finalist", "top_performer", "organizer", "mentor"]
-    total = await event_certificates_col.count_documents({"institution_id": institution_id})
-    ach = await event_certificates_col.count_documents({"institution_id": institution_id, "achievement_key": {"$in": achievement_keys}})
-    part = await event_certificates_col.count_documents({"institution_id": institution_id, "achievement_key": "participation"})
-    pending = await event_certificates_col.count_documents({"institution_id": institution_id, "$or": [{"status": "Pending"}, {"status": {"$exists": False}}]})
+    total = await event_certificates_col.count_documents(match)
+    ach = await event_certificates_col.count_documents({**match, "achievement_key": {"$in": achievement_keys}})
+    part = await event_certificates_col.count_documents({**match, "achievement_key": "participation"})
+    pending = await event_certificates_col.count_documents({**match, "$or": [{"status": "Pending"}, {"status": {"$exists": False}}]})
     return {
         "total": total,
         "achievement": ach,
@@ -263,10 +273,10 @@ async def issue_certificates(
 
         if not user_id:
             continue
-        existing = await certificates_col.find_one({
+        existing = await event_certificates_col.find_one({
             "event_id": event_id,
             "user_id": user_id,
-            "type": ACHIEVEMENT_TYPES.get(achievement_type, "Participation"),
+            "achievement_key": achievement_type,
         })
         if existing:
             continue

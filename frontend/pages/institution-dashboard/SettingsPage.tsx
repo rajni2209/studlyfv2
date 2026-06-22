@@ -66,6 +66,8 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
     const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
     const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
     const [eventPackages, setEventPackages] = useState<any[] | null>(null);
+    const [sponsors, setSponsors] = useState<{ name: string; logo: string }[]>([]);
+    const [savingSponsors, setSavingSponsors] = useState(false);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -222,6 +224,15 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
                             if (Array.isArray(parsed)) setEventPackages(parsed);
                         } catch (e) {
                             console.warn('Failed to parse event_packages', e);
+                        }
+                    }
+                    const rawSponsors = cfg?.sponsors;
+                    if (rawSponsors) {
+                        try {
+                            const parsed = typeof rawSponsors === 'string' ? JSON.parse(rawSponsors) : rawSponsors;
+                            if (Array.isArray(parsed)) setSponsors(parsed);
+                        } catch (e) {
+                            console.warn('Failed to parse sponsors', e);
                         }
                     }
                 }
@@ -990,6 +1001,83 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
                                                     <div className="text-xs text-slate-400 mt-1 truncate">{p.url || p.link}</div>
                                                 </a>
                                             ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {hackathonPackageEnabled && (
+                                    <div className="max-w-4xl mx-auto mb-6 px-4">
+                                        <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <h4 className="text-sm font-black text-slate-500 uppercase tracking-widest">Sponsor Logos</h4>
+                                                <button
+                                                    onClick={() => setSponsors([...sponsors, { name: '', logo: '' }])}
+                                                    className="px-3 py-1.5 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center gap-1"
+                                                >
+                                                    <Plus size={14} /> Add Sponsor
+                                                </button>
+                                            </div>
+                                            <p className="text-xs text-slate-400 mb-4">Sponsors appear on the Participant Card and poster preview. Add company name and logo URL.</p>
+                                            <div className="space-y-3">
+                                                {sponsors.map((s, i) => (
+                                                    <div key={i} className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                                        {s.logo && (
+                                                            <img src={s.logo} alt={s.name} className="w-10 h-10 rounded-lg object-contain bg-white border border-slate-200" />
+                                                        )}
+                                                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                            <input
+                                                                value={s.name}
+                                                                onChange={(e) => {
+                                                                    const next = [...sponsors];
+                                                                    next[i] = { ...next[i], name: e.target.value };
+                                                                    setSponsors(next);
+                                                                }}
+                                                                placeholder="Company name"
+                                                                className="p-2 rounded-lg border border-slate-200 bg-white text-sm outline-none"
+                                                            />
+                                                            <input
+                                                                value={s.logo}
+                                                                onChange={(e) => {
+                                                                    const next = [...sponsors];
+                                                                    next[i] = { ...next[i], logo: e.target.value };
+                                                                    setSponsors(next);
+                                                                }}
+                                                                placeholder="Logo URL"
+                                                                className="p-2 rounded-lg border border-slate-200 bg-white text-sm outline-none"
+                                                            />
+                                                        </div>
+                                                        <button
+                                                            onClick={() => setSponsors(sponsors.filter((_, j) => j !== i))}
+                                                            className="p-2 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                            {sponsors.length > 0 && (
+                                                <button
+                                                    onClick={async () => {
+                                                        setSavingSponsors(true);
+                                                        try {
+                                                            await fetch(`${API_BASE_URL}/api/v1/institution/hackathon/event-config`, {
+                                                                method: 'PUT',
+                                                                headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                                                                body: JSON.stringify({ sponsors: JSON.stringify(sponsors) }),
+                                                            });
+                                                        } catch (e) {
+                                                            console.error('Failed to save sponsors', e);
+                                                        } finally {
+                                                            setSavingSponsors(false);
+                                                        }
+                                                    }}
+                                                    disabled={savingSponsors}
+                                                    className="mt-4 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-bold flex items-center gap-1 disabled:opacity-60"
+                                                >
+                                                    {savingSponsors ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                                                    Save Sponsors
+                                                </button>
+                                            )}
                                         </div>
                                     </div>
                                 )}

@@ -211,11 +211,15 @@ const ParticipantCardPage: React.FC = () => {
                         </div>
                         <div className="p-4 rounded-2xl bg-white/10 border border-white/10">
                             <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.25em] mb-2">Sponsors</p>
-                            <div className="flex flex-wrap gap-2">
-                                {sponsorNames.length > 0 ? sponsorNames.map((s: any, idx: number) => (
+                        <div className="flex flex-wrap gap-3 items-center">
+                            {sponsorNames.length > 0 ? sponsorNames.map((s: any, idx: number) => (
+                                s.logo ? (
+                                    <img key={idx} src={s.logo} alt={s.name || s.label || 'Sponsor'} className="h-8 max-w-24 object-contain bg-white rounded-lg px-2 py-1 border border-white/20" title={s.name || s.label} />
+                                ) : (
                                     <span key={idx} className="px-3 py-1 rounded-full bg-white text-slate-900 text-xs font-bold">{s.name || s.label || 'Sponsor'}</span>
-                                )) : <span className="text-white/70 text-sm">No sponsor list configured.</span>}
-                            </div>
+                                )
+                            )) : <span className="text-white/70 text-sm">No sponsor list configured.</span>}
+                        </div>
                         </div>
                     </div>
 
@@ -283,9 +287,13 @@ const ParticipantCardPage: React.FC = () => {
                         )}
                         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">#Innovation #Hackathon #Studlyf</div>
                         {sponsorNames.length > 0 && (
-                            <div className="pt-2 border-t border-slate-200 flex flex-wrap justify-center gap-2 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                            <div className="pt-2 border-t border-slate-200 flex flex-wrap justify-center gap-3 items-center">
                                 {sponsorNames.map((s: any, idx: number) => (
-                                    <span key={idx}>{s.name || s.label}</span>
+                                    s.logo ? (
+                                        <img key={idx} src={s.logo} alt={s.name || s.label || 'Sponsor'} className="h-6 max-w-20 object-contain" title={s.name || s.label} />
+                                    ) : (
+                                        <span key={idx} className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{s.name || s.label}</span>
+                                    )
                                 ))}
                             </div>
                         )}
