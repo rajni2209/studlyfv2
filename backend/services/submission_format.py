@@ -12,7 +12,7 @@ def build_frontend_url(path: str) -> str:
     """Build a HashRouter-safe frontend URL (e.g. https://app.com/#/opportunities/...)."""
     import os
 
-    base = (os.getenv("FRONTEND_URL") or "http://localhost:3000").rstrip("/")
+    base = (os.getenv("FRONTEND_URL", "https://studlyf.in")).rstrip("/")
     if "/#" in base:
         base = base.split("/#")[0].rstrip("/")
     clean = path if path.startswith("/") else f"/{path}"

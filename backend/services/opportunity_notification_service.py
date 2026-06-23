@@ -55,7 +55,7 @@ async def send_new_opportunity_email(opportunity: dict, event: dict = None) -> d
                 deadline_str = opp_deadline.strftime("%B %d, %Y")
 
         email_subject = f"New Opportunity: {opp_title} by {org_name}"
-        frontend_url = os.getenv('FRONTEND_URL', 'http://localhost:3000')
+        frontend_url = os.getenv('FRONTEND_URL', 'https://studlyf.in')
         event_link = f"{frontend_url}/#/opportunities/{opp_id}"
 
         # Resolve template from DB (event-level > institution-level > default)
@@ -177,7 +177,7 @@ async def send_deadline_reminder_emails(days_until: int = 3) -> dict:
                             event_title=opp_title,
                             organization_name=opp_org,
                             registration_deadline=reminder_date,
-                            event_link=f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/#/opportunities/{opp_id}",
+                            event_link=f"{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/#/opportunities/{opp_id}",
                         )
                         sent_count += 1
                         
@@ -260,7 +260,7 @@ async def send_daily_digest_email() -> dict:
                         <p style="margin: 0 0 8px 0; color: #64748b; font-size: 13px;">{opp.get('organization') or ''}</p>
                         <div style="display: flex; justify-content: space-between; align-items: center;">
                             <span style="color: #64748b; font-size: 12px;">📅 {deadline_str} <span style="color: #f59e0b; font-weight: 600;">({days_left}d left)</span></span>
-                            <a href="{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/#/opportunities/{str(opp.get('_id'))}" style="background: #667eea; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 11px; font-weight: 600;">View</a>
+                            <a href="{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/#/opportunities/{str(opp.get('_id'))}" style="background: #667eea; color: white; padding: 6px 12px; border-radius: 6px; text-decoration: none; font-size: 11px; font-weight: 600;">View</a>
                         </div>
                     </div>
                     """
@@ -281,13 +281,13 @@ async def send_daily_digest_email() -> dict:
                             </div>
 
                             <div style="text-align: center; margin-bottom: 30px;">
-                                <a href="{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/opportunities" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block; text-transform: uppercase; letter-spacing: 0.5px;">
+                                <a href="{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/opportunities" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block; text-transform: uppercase; letter-spacing: 0.5px;">
                                     Browse All Opportunities
                                 </a>
                             </div>
 
                             <div style="background: #f1f5f9; padding: 15px; border-radius: 8px; text-align: center; color: #64748b; font-size: 12px;">
-                                <p style="margin: 0;">You're receiving this daily digest because you're registered on Studlyf. <a href="{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/settings/notifications" style="color: #667eea; text-decoration: none;">Manage preferences</a></p>
+                                <p style="margin: 0;">You're receiving this daily digest because you're registered on Studlyf. <a href="{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/settings/notifications" style="color: #667eea; text-decoration: none;">Manage preferences</a></p>
                             </div>
                         </div>
                     </body>

@@ -30,8 +30,8 @@ export default defineConfig(({ mode }) => {
       // Removed: ADDITIONAL_CORS_ORIGINS (sensitive infrastructure)
       
       // SAFE: Only public, non-sensitive values
-      'import.meta.env.FRONTEND_URL': JSON.stringify(env.FRONTEND_URL || process.env.FRONTEND_URL || 'https://studlyfhub.vercel.app'),
-      'import.meta.env.RENDER_EXTERNAL_URL': JSON.stringify(env.RENDER_EXTERNAL_URL || process.env.RENDER_EXTERNAL_URL || 'https://studlyf-tlkk.onrender.com'),
+      'import.meta.env.FRONTEND_URL': JSON.stringify(env.FRONTEND_URL || process.env.FRONTEND_URL || 'https://studlyf.in'),
+      'import.meta.env.RENDER_EXTERNAL_URL': JSON.stringify(env.RENDER_EXTERNAL_URL || process.env.RENDER_EXTERNAL_URL || 'https://api.studlyf.in'),
       'import.meta.env.VITE_ENABLE_ANALYTICS': JSON.stringify(env.VITE_ENABLE_ANALYTICS || 'true'),
       'import.meta.env.VITE_ENABLE_SENTRY': JSON.stringify(env.VITE_ENABLE_SENTRY || 'true')
     },

@@ -4,32 +4,70 @@ import { Link } from 'react-router-dom';
 import {
     Mail,
     MessageCircle,
-    Users,
-    Trophy,
-    HelpCircle,
-    Video,
-    MonitorPlay,
-    FileText,
-    BookOpen,
-    Book,
-    GraduationCap,
-    ArrowRight,
-    Sparkles,
     Instagram
 } from 'lucide-react';
 
-const DashboardFooter: React.FC = () => {
+interface DashboardFooterProps {
+    variant?: 'student' | 'institution';
+}
 
-    const resources = [
-        { icon: Trophy, label: "Coding Competitions" },
-        { icon: HelpCircle, label: "Coding Quizzes" },
-        { icon: Video, label: "Coding Masterclasses" },
-        { icon: MonitorPlay, label: "Coding Webinars" },
-        { icon: FileText, label: "Coding Worksheets" },
-        { icon: BookOpen, label: "Coding Blog" },
-        { icon: Book, label: "Coding Guides" },
-        { icon: GraduationCap, label: "Coding Courses" },
-    ];
+const DashboardFooter: React.FC<DashboardFooterProps> = ({ variant = 'student' }) => {
+
+    const isInstitution = variant === 'institution';
+
+    const institutionLinks = {
+        col2: [
+            { name: 'Events Management', to: '/institution-dashboard' },
+            { name: 'Participants', to: '/institution-dashboard?tab=participants' },
+            { name: 'Teams', to: '/institution-dashboard?tab=teams' },
+            { name: 'Certificates', to: '/institution-dashboard?tab=certificates' },
+            { name: 'Reports', to: '/institution-dashboard?tab=reports' },
+        ],
+        col3: [
+            { name: 'Evaluation', to: '/institution-dashboard?tab=evaluation' },
+            { name: 'Judging Panel', to: '/institution-dashboard?tab=judging' },
+            { name: 'Leaderboard', to: '/institution-dashboard?tab=leaderboard' },
+            { name: 'Submissions', to: '/institution-dashboard?tab=submissions' },
+            { name: 'Stages', to: '/institution-dashboard?tab=stages' },
+        ],
+        col4: [
+            { name: 'Institution Settings', to: '/institution-dashboard?tab=settings' },
+            { name: 'Branding', to: '/institution-dashboard?tab=branding' },
+            { name: 'Team Members', to: '/institution-dashboard?tab=team' },
+            { name: 'Notifications', to: '/institution-dashboard?tab=notifications' },
+        ],
+        col5: [
+            { name: 'Documentation', to: '/docs/institution' },
+            { name: 'API Access', to: '/institution-dashboard?tab=api' },
+            { name: 'Support', to: 'mailto:support@studlyf.com' },
+            { name: 'Help Center', to: '/help' },
+        ],
+    };
+
+    const studentLinks = {
+        col2: [
+            { name: 'Courses', to: '/learn/courses-overview' },
+            { name: 'Company Modules', to: '/learn/company-modules' },
+            { name: 'Blogs', to: '/blog' },
+        ],
+        col3: [
+            { name: 'Portfolio', to: '/job-prep/portfolio' },
+            { name: 'Resume', to: '/job-prep/resume-builder' },
+            { name: 'Skills Assignment', to: '/learn/assessment-intro' },
+            { name: 'Interviews', to: '/job-prep/mock-interview' },
+            { name: 'Project', to: '/job-prep/projects' },
+        ],
+        col4: [
+            { name: 'AI Tools', to: '/ai-tools' },
+        ],
+        col5: [
+            { name: 'About Application', to: '/about' },
+            { name: 'Contact Us', to: 'mailto:saieshwarerelli10@gmail.com' },
+            { name: 'Resources', to: '/' },
+        ],
+    };
+
+    const links = isInstitution ? institutionLinks : studentLinks;
 
     return (
         <section className="relative w-full bg-[#0B0B0F] py-12 px-4 md:px-10 font-poppins font-medium overflow-hidden">
@@ -202,13 +240,9 @@ const DashboardFooter: React.FC = () => {
                     {/* Column 1: Logo & Slogan */}
                     <div className="col-span-2 lg:col-span-1 flex flex-col items-start space-y-6">
                         <Link to="/" className="relative group/logo block">
-                            {/* Animated Outer Glow Background */}
                             <div className="absolute inset-0 bg-[#7C3AED]/20 blur-2xl rounded-3xl opacity-50 group-hover/logo:opacity-100 transition-opacity duration-500" />
-                            
                             <div className="relative bg-white px-6 py-3 rounded-2xl shadow-2xl transition-all duration-500 hover:scale-[1.03] w-fit overflow-hidden">
-                                {/* Subtle Internal Radial Light */}
                                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(0,0,0,0.02)_0%,_transparent_75%)]" />
-                                
                                 <img 
                                     src="/images-optimized/studlyf.webp" 
                                     alt="Studlyf" 
@@ -217,57 +251,62 @@ const DashboardFooter: React.FC = () => {
                             </div>
                         </Link>
                         <p className="text-[#CFCFEA]/80 text-sm md:text-base font-poppins leading-relaxed font-semibold opacity-60">
-                            Empowering the next generation of engineers with AI-driven career tools and resources.
+                            {isInstitution
+                                ? 'Empowering institutions with AI-driven tools to manage events, participants, and certifications seamlessly.'
+                                : 'Empowering the next generation of engineers with AI-driven career tools and resources.'
+                            }
                         </p>
                     </div>
 
                     {/* Column 2 */}
                     <div className="flex flex-col space-y-5 lg:ml-8">
-                        {[
-                            { name: 'Courses', to: '/learn/courses-overview' },
-                            { name: 'Company Modules', to: '/learn/company-modules' },
-                            { name: 'Blogs', to: '/blog' }
-                        ].map((item) => (
-                            <Link key={item.name} to={item.to} className="text-white/80 hover:text-[#9D7CFF] transition-all duration-200 uppercase tracking-wider text-sm md:text-base font-medium font-poppins hover:translate-x-1 w-fit">
-                                {item.name}
-                            </Link>
+                        {links.col2.map((item) => (
+                            item.name === 'Contact Us' || item.name === 'Support' ? (
+                                <a key={item.name} href={item.to} className="text-white/80 hover:text-[#9D7CFF] transition-all duration-200 uppercase tracking-wider text-sm md:text-base font-medium font-poppins hover:translate-x-1 w-fit">
+                                    {item.name}
+                                </a>
+                            ) : (
+                                <Link key={item.name} to={item.to} className="text-white/80 hover:text-[#9D7CFF] transition-all duration-200 uppercase tracking-wider text-sm md:text-base font-medium font-poppins hover:translate-x-1 w-fit">
+                                    {item.name}
+                                </Link>
+                            )
                         ))}
                     </div>
 
                     {/* Column 3 */}
                     <div className="flex flex-col space-y-5">
-                        {[
-                            { name: 'Portfolio', to: '/job-prep/portfolio' },
-                            { name: 'Resume', to: '/job-prep/resume-builder' },
-                            { name: 'Skills Assignment', to: '/learn/assessment-intro' },
-                            { name: 'Interviews', to: '/job-prep/mock-interview' },
-                            { name: 'Project', to: '/job-prep/projects' }
-                        ].map((item) => (
-                            <Link key={item.name} to={item.to} className="text-white/80 hover:text-[#9D7CFF] transition-all duration-200 uppercase tracking-wider text-sm md:text-base font-medium font-poppins hover:translate-x-1 w-fit">
-                                {item.name}
-                            </Link>
+                        {links.col3.map((item) => (
+                            item.name === 'Contact Us' || item.name === 'Support' ? (
+                                <a key={item.name} href={item.to} className="text-white/80 hover:text-[#9D7CFF] transition-all duration-200 uppercase tracking-wider text-sm md:text-base font-medium font-poppins hover:translate-x-1 w-fit">
+                                    {item.name}
+                                </a>
+                            ) : (
+                                <Link key={item.name} to={item.to} className="text-white/80 hover:text-[#9D7CFF] transition-all duration-200 uppercase tracking-wider text-sm md:text-base font-medium font-poppins hover:translate-x-1 w-fit">
+                                    {item.name}
+                                </Link>
+                            )
                         ))}
                     </div>
 
                     {/* Column 4 */}
                     <div className="flex flex-col space-y-5">
-                        {[
-                            { name: 'AI Tools', to: '/ai-tools' }
-                        ].map((item) => (
-                            <Link key={item.name} to={item.to} className="text-white/80 hover:text-[#9D7CFF] transition-all duration-200 uppercase tracking-wider text-sm md:text-base font-medium font-poppins hover:translate-x-1 w-fit">
-                                {item.name}
-                            </Link>
+                        {links.col4.map((item) => (
+                            item.name === 'Contact Us' || item.name === 'Support' ? (
+                                <a key={item.name} href={item.to} className="text-white/80 hover:text-[#9D7CFF] transition-all duration-200 uppercase tracking-wider text-sm md:text-base font-medium font-poppins hover:translate-x-1 w-fit">
+                                    {item.name}
+                                </a>
+                            ) : (
+                                <Link key={item.name} to={item.to} className="text-white/80 hover:text-[#9D7CFF] transition-all duration-200 uppercase tracking-wider text-sm md:text-base font-medium font-poppins hover:translate-x-1 w-fit">
+                                    {item.name}
+                                </Link>
+                            )
                         ))}
                     </div>
 
                     {/* Column 5 */}
                     <div className="flex flex-col space-y-5">
-                        {[
-                            { name: 'About Application', to: '/about' },
-                            { name: 'Contact Us', to: 'mailto:saieshwarerelli10@gmail.com' },
-                            { name: 'Resources', to: '/' }
-                        ].map((item) => (
-                            item.name === 'Contact Us' ? (
+                        {links.col5.map((item) => (
+                            item.name === 'Contact Us' || item.name === 'Support' ? (
                                 <a key={item.name} href={item.to} className="text-white/80 hover:text-[#9D7CFF] transition-all duration-200 uppercase tracking-wider text-sm md:text-base font-medium font-poppins hover:translate-x-1 w-fit">
                                     {item.name}
                                 </a>

@@ -76,17 +76,6 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin, transparent = 
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (isInstitution) {
-            const personalDomains = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'aol.com'];
-            const domain = email.split('@').pop()?.toLowerCase();
-            if (domain && personalDomains.includes(domain)) {
-                setError(
-                    "Please use your institution's official email (e.g., @university.edu). Personal Gmail/Yahoo accounts are not permitted for institutional registration."
-                );
-                return;
-            }
-        }
-
         if (!agreed) {
             setError('Please accept Terms & Conditions.');
             return;
@@ -221,7 +210,7 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin, transparent = 
                                         <Mail className="absolute left-3 top-3.5 text-gray-300" size={18} />
                                         <input
                                             type="email"
-                                            placeholder={isInstitution ? 'admin@institution.edu' : 'shiva@gmail.com'}
+                                            placeholder={isInstitution ? 'admin@institution.com' : 'shiva@gmail.com'}
                                             className={`${inputBase} pl-10`}
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}

@@ -64,7 +64,7 @@ ALLOWED_MIMETYPES = {
 # CORS configuration - SPECIFIC ORIGINS ONLY
 ALLOWED_ORIGINS = [
     origin.strip() 
-    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    for origin in os.getenv("CORS_ALLOWED_ORIGINS", "https://studlyf.in").split(",")
 ]
 
 # Rate limiting (simple in-memory)

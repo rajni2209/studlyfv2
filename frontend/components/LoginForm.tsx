@@ -68,10 +68,10 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup, transparent = f
                 }
 
                 // Default redirect based on role
-                if (data.user.role === 'super_admin' || data.user.role === 'admin') navigate('/admin');
-                else if (data.user.role === 'institution') navigate('/institution-dashboard');
-                else if (data.user.role === 'judge') navigate('/judge-portal');
-                else navigate('/dashboard');
+            if (data.user.role === 'super_admin' || data.user.role === 'admin') navigate('/admin');
+            else if (data.user.role === 'institution') navigate('/institution-dashboard?post=true');
+            else if (data.user.role === 'judge') navigate('/judge-portal');
+            else navigate('/dashboard');
             } else {
                 const detail = data.detail || 'Login failed. Please check your credentials.';
                 setError(detail);
@@ -158,7 +158,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSwitchToSignup, transparent = f
                          type="email"
                          name="email"
                          autoComplete="email"
-                         placeholder={selectedRole === 'institution' ? "admin@institution.edu" : "shiva@gmail.com"}
+                         placeholder={selectedRole === 'institution' ? "admin@institution.com" : "shiva@gmail.com"}
                          className={inputClasses}
                          value={email}
                          onChange={(e) => setEmail(e.target.value)}

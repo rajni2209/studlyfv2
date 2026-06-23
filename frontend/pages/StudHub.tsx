@@ -2,6 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { BrainCircuit, Gift, Landmark, Map, ArrowRight, PlayCircle, Users, CheckCircle, TrendingUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import DashboardFooter from '../components/DashboardFooter';
 
 const StudHub: React.FC = () => {
   const navigate = useNavigate();
@@ -191,6 +192,7 @@ const StudHub: React.FC = () => {
         </div>
 
       </div>
+      <DashboardFooter />
     </div>
   );
 };

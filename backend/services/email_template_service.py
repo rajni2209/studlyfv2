@@ -549,7 +549,7 @@ def render_template(template: dict, context: dict) -> (str, str):
     Wraps the body in our beautiful HSL congratulations purple shell.
     """
     import os
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
     
     full_context = {
         "frontend_url": frontend_url,
@@ -866,7 +866,7 @@ def render_stage_custom_email(subject_override: str, body_markdown: str, context
     and replaces placeholders with context variables.
     """
     import os
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
     
     # Render the subject override or standard subject
     subject = subject_override or "Congratulations {{team_name}}! You've advanced to {{stage_name}}"
@@ -899,14 +899,14 @@ AVAILABLE_STAGE_VARIABLES = {
     "team_leader_name": {"description": "Name of the team leader initiating actions", "example": "John Doe", "scopes": ["all"]},
     "current_team_size": {"description": "Current number of members in the team", "example": "3", "scopes": ["all"]},
     "max_team_size": {"description": "Maximum allowed members in the team", "example": "configured value", "scopes": ["all"]},
-    "team_link": {"description": "Direct URL link to the Team page", "example": "http://localhost:3000/dashboard/team/123", "scopes": ["all"]},
+    "team_link": {"description": "Direct URL link to the Team page", "example": "https://studlyf.in/dashboard/team/123", "scopes": ["all"]},
     
     # Event & Round details
     "event_name": {"description": "Title of the hackathon or event", "example": "Studlyf Winter Hackathon", "scopes": ["all"]},
     "event_title": {"description": "Alternative title field of the event", "example": "Studlyf Winter Hackathon", "scopes": ["all"]},
     "event_type": {"description": "Format/Type of the opportunity", "example": "Hackathon", "scopes": ["all"]},
     "event_mode": {"description": "Participation mode", "example": "Online", "scopes": ["all"]},
-    "event_link": {"description": "Direct URL link to the Event Hub page", "example": "http://localhost:3000/opportunity/event-123", "scopes": ["all"]},
+    "event_link": {"description": "Direct URL link to the Event Hub page", "example": "https://studlyf.in/opportunity/event-123", "scopes": ["all"]},
     "organization_name": {"description": "Name of the host organization", "example": "Google DeepMind", "scopes": ["all"]},
     "registration_deadline": {"description": "Deadline date for registering", "example": "2026-06-01", "scopes": ["all"]},
     "prize_pool": {"description": "Total prize pool details", "example": "$10,000 USD", "scopes": ["all"]},
@@ -920,7 +920,7 @@ AVAILABLE_STAGE_VARIABLES = {
     "new_deadline": {"description": "Extended deadline date/time for the stage", "example": "2026-06-05 23:59 UTC", "scopes": ["all"]},
     "round_name": {"description": "Name of the unlocked round", "example": "Round 1: Idea Submission", "scopes": ["all"]},
     "round_deadline": {"description": "Deadline for the unlocked round", "example": "2026-06-10", "scopes": ["all"]},
-    "round_link": {"description": "Direct URL link to the active round page", "example": "http://localhost:3000/dashboard/round/456", "scopes": ["all"]},
+    "round_link": {"description": "Direct URL link to the active round page", "example": "https://studlyf.in/dashboard/round/456", "scopes": ["all"]},
     "submission_time": {"description": "Timestamp of confirmation", "example": "2026-05-22 18:00 UTC", "scopes": ["all"]},
     "winning_team": {"description": "Name of the winning team", "example": "Apex Coders", "scopes": ["all"]},
     "prize_details": {"description": "Specific winning prize description", "example": "1st Place - $5,000 + Certificate", "scopes": ["all"]},
@@ -933,8 +933,8 @@ AVAILABLE_STAGE_VARIABLES = {
     # Certificates
     "certificate_id": {"description": "Unique verification certificate identifier", "example": "CERT-88192-X", "scopes": ["all"]},
     "issued_date": {"description": "Date the certificate was generated", "example": "2026-05-22", "scopes": ["all"]},
-    "certificate_download_link": {"description": "Direct PDF download URL", "example": "http://localhost:3000/certificates/download/123", "scopes": ["all"]},
-    "verification_url": {"description": "URL for public certificate verification", "example": "http://localhost:3000/verify/CERT-88192-X", "scopes": ["all"]},
+    "certificate_download_link": {"description": "Direct PDF download URL", "example": "https://studlyf.in/certificates/download/123", "scopes": ["all"]},
+    "verification_url": {"description": "URL for public certificate verification", "example": "https://studlyf.in/verify/CERT-88192-X", "scopes": ["all"]},
     "achievement_level": {"description": "Specific badge or level of achievement", "example": "Winner / Participant", "scopes": ["all"]},
     
     # Subscriptions & Billing
@@ -943,30 +943,30 @@ AVAILABLE_STAGE_VARIABLES = {
     "start_date": {"description": "Subscription period start date", "example": "2026-05-22", "scopes": ["all"]},
     "expiry_date": {"description": "Subscription period expiry date", "example": "2027-05-22", "scopes": ["all"]},
     "billing_cycle": {"description": "Frequency of billing (monthly/annual)", "example": "Annual", "scopes": ["all"]},
-    "manage_subscription_url": {"description": "Direct URL to checkout portal settings", "example": "http://localhost:3000/dashboard/billing", "scopes": ["all"]},
+    "manage_subscription_url": {"description": "Direct URL to checkout portal settings", "example": "https://studlyf.in/dashboard/billing", "scopes": ["all"]},
     "expiry_label": {"description": "Descriptive tag for expiry state (expired/expires soon)", "example": "expired", "scopes": ["all"]},
-    "renew_url": {"description": "Stripe/Payment gateway checkout URL", "example": "http://localhost:3000/dashboard/billing/renew", "scopes": ["all"]},
+    "renew_url": {"description": "Stripe/Payment gateway checkout URL", "example": "https://studlyf.in/dashboard/billing/renew", "scopes": ["all"]},
     "renew_section": {"description": "HTML button/section to renew subscription", "example": "<a href='...'>Renew Now</a>", "scopes": ["all"]},
     "message": {"description": "Custom system or warning message", "example": "Your subscription expired yesterday.", "scopes": ["all"]},
-    "payment_link": {"description": "Checkout page url to update card", "example": "http://localhost:3000/dashboard/billing/pay", "scopes": ["all"]},
+    "payment_link": {"description": "Checkout page url to update card", "example": "https://studlyf.in/dashboard/billing/pay", "scopes": ["all"]},
     "amount": {"description": "Amount paid/confirmed", "example": "$199.00 USD", "scopes": ["all"]},
     "transaction_id": {"description": "Unique transaction code", "example": "ch_3Mv9zXLk...", "scopes": ["all"]},
     "billing_date": {"description": "Date transaction took place", "example": "2026-05-22", "scopes": ["all"]},
     
     # System Triggers
-    "reset_link": {"description": "Single-use secure link for password resets", "example": "http://localhost:3000/reset-password?token=...", "scopes": ["all"]},
+    "reset_link": {"description": "Single-use secure link for password resets", "example": "https://studlyf.in/reset-password?token=...", "scopes": ["all"]},
     "expiry_duration": {"description": "Time until link expires", "example": "1 hour", "scopes": ["all"]},
-    "verification_link": {"description": "Link to verify registration email", "example": "http://localhost:3000/verify-email?token=...", "scopes": ["all"]},
-    "invite_link": {"description": "Link to accept invitation to join team", "example": "http://localhost:3000/join-team?token=...", "scopes": ["all"]},
+    "verification_link": {"description": "Link to verify registration email", "example": "https://studlyf.in/verify-email?token=...", "scopes": ["all"]},
+    "invite_link": {"description": "Link to accept invitation to join team", "example": "https://studlyf.in/join-team?token=...", "scopes": ["all"]},
     
     # Organizer notification specifics
     "organizer_name": {"description": "Name of the event organizer", "example": "Vivek Goud", "scopes": ["all"]},
     "registration_count": {"description": "Total registration count", "example": "154", "scopes": ["all"]},
-    "dashboard_link": {"description": "Link to the organizer administration panel", "example": "http://localhost:3000/dashboard/organizer", "scopes": ["all"]},
+    "dashboard_link": {"description": "Link to the organizer administration panel", "example": "https://studlyf.in/dashboard/organizer", "scopes": ["all"]},
     
     # Recommendations
     "recommended_opportunities": {"description": "HTML or text block list of recommended opportunities", "example": "• Opportunity A...", "scopes": ["all"]},
-    "recommendation_link": {"description": "Personalized discovery page URL", "example": "http://localhost:3000/dashboard/learner/discover", "scopes": ["all"]},
+    "recommendation_link": {"description": "Personalized discovery page URL", "example": "https://studlyf.in/dashboard/learner/discover", "scopes": ["all"]},
     
     # Legacy specific fallback variables
     "custom_message": {"description": "Freeform rich-text message body", "example": "Dear team, please note...", "scopes": ["all"]}

@@ -98,7 +98,7 @@ async def download_user_certificate(
 
     # Fallback: redirect to static URL or render HTML
     from fastapi.responses import RedirectResponse
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
     return RedirectResponse(url=f"{frontend_url}/certificates/{cert_id}.pdf")
 
 

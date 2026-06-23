@@ -446,7 +446,7 @@ async def _send_expiry_notification(institution_id: str, end_date: datetime, lab
     if not recipient:
         return
 
-    frontend_url = os.getenv('FRONTEND_URL') or os.getenv('BASE_URL') or '#'
+    frontend_url = os.getenv('FRONTEND_URL', 'https://studlyf.in')
     is_expired = "expired" in label.lower()
 
     await send_template_email(

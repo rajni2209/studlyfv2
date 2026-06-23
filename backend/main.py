@@ -104,7 +104,7 @@ logger = logging.getLogger("main_service")
 
 # Configure CORS - Restricted to specific domains for security
 # Load allowed origins from environment or use defaults
-frontend_url = os.getenv("FRONTEND_URL", "https://studlyf-v2.vercel.app")
+frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
 backend_url = os.getenv("RENDER_EXTERNAL_URL", "")
 additional_origins = [origin.strip() for origin in os.getenv("ADDITIONAL_CORS_ORIGINS", "").split(",") if origin.strip()]
 
@@ -920,7 +920,7 @@ async def get_user_badges(user_id: str):
 
 
 # Base URL for backend links (portfolios, resumes)
-BASE_URL = os.getenv("RENDER_EXTERNAL_URL", "http://localhost:8000")
+BASE_URL = os.getenv("RENDER_EXTERNAL_URL", "https://api.studlyf.in")
 BASE_DIR = os.path.dirname(__file__)
 PORTFOLIO_DIR = os.path.join(BASE_DIR, "generated_portfolios")
 TEMPLATE_DIR = os.path.join(BASE_DIR, "templates")
@@ -2671,7 +2671,7 @@ async def checkout(user_id: str):
                     {course_list_html}
                     <p>You can now access these courses from your dashboard and start learning.</p>
                     <div style="margin-top: 30px; text-align: center;">
-                        <a href="{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/dashboard/my-courses" 
+                        <a href="{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/dashboard/my-courses" 
                            style="background-color: #7C3AED; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
                             Go to My Courses
                         </a>
@@ -2922,7 +2922,7 @@ async def confirm_track_enrollment(user_id: str, data: dict = Body(...)):
 
                     <!-- Direct Access Button -->
                     <div style="text-align: center; margin: 40px 0 20px 0;">
-                        <a href="{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/#/dashboard/learner?view=overview" 
+                        <a href="{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/#/dashboard/learner?view=overview" 
                            style="background: linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%); color: #ffffff; padding: 16px 36px; text-decoration: none; border-radius: 14px; font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.1em; display: inline-block; box-shadow: 0 10px 20px rgba(124, 58, 237, 0.25);">
                             Go to My Dashboard →
                         </a>
@@ -6557,15 +6557,6 @@ async def signup(user_data: UserSignup, request: Request):
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Restrict Institution Emails to professional domains (COMMENTED OUT FOR TESTING)
-    if user_data.role == "institution":
-        personal_domains = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com", "aol.com"]
-        domain = user_data.email.split("@")[-1].lower()
-        # if domain in personal_domains:
-        #     raise HTTPException(
-        #         status_code=400, 
-        #         detail="Institutions must register with an official organization email (e.g., @college.edu or @company.com). Personal Gmail/Yahoo accounts are not permitted for this role."
-        #     )
     
     if len(user_data.password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters long")
@@ -6653,7 +6644,7 @@ async def signup(user_data: UserSignup, request: Request):
         logger.error(f"Failed to persist verification token: {e}")
         raise HTTPException(status_code=500, detail="Failed to create verification link")
 
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
     verification_link = f"{frontend_url}/#/verify-email?token={verification_token}"
     signup_name = user_data.full_name or "Participant"
     from services.platform_notification_service import notify_email_verification
@@ -6847,7 +6838,7 @@ async def resend_verification(data: dict = Body(...)):
         upsert=True,
     )
 
-    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+    frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
     verification_link = f"{frontend_url}/#/verify-email?token={token}"
     participant_name = user.get("full_name") or user.get("name") or "Participant"
     await send_notification_email(
@@ -7504,7 +7495,7 @@ async def register_for_event(event_id: str, participant: Participant):
                     "institution_id": str(inst_id),
                     "role": {"$in": ["admin", "institution", "super_admin"]}
                 }).to_list(length=None)
-                dashboard_link = f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/#/institution-dashboard"
+                dashboard_link = f"{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/#/institution-dashboard"
                 for admin in admins:
                     admin_email = (admin.get("email") or "").strip()
                     if not admin_email:
@@ -7533,7 +7524,7 @@ async def create_team():
 async def join_team(team_id: str):
     raise HTTPException(status_code=410, detail="Deprecated. Use /api/teams/join-by-invite (JWT required).")
 
-@app.patch("/api/participants/{p_id}/status", dependencies=[Depends(require_role(["Admin"]))])
+@app.patch("/api/participants/{p_id}/status", dependencies=[Depends(require_role(["Admin", "institution"]))])
 async def update_participant_status(p_id: str, status: str = Body(embed=True), current_user: dict = Depends(get_current_user)):
     """
     ADMIN: Verifies or rejects a participant registration.

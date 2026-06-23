@@ -54,7 +54,7 @@ Good luck in the next round!`;
             .replace(/\{\{event_name\}\}|\{event_name\}/g, 'StudLyf Hackathon')
             .replace(/\{\{participant_name\}\}|\{participant_name\}/g, 'Alex Mercer')
             .replace(/\{\{deadline\}\}|\{deadline\}/g, '2026-05-29')
-            .replace(/\{\{event_link\}\}|\{event_link\}/g, 'http://localhost:3000/dashboard/learner');
+            .replace(/\{\{event_link\}\}|\{event_link\}/g, 'https://studlyf.in/dashboard/learner');
     };
 
     const cleanSubject = replacePlaceholders(activeSubject);

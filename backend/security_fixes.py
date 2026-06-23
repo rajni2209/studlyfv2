@@ -30,7 +30,7 @@ def setup_secure_cookies(app):
     # Add CORS middleware with specific origins
     ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "").split(",")
     if not ALLOWED_ORIGINS or ALLOWED_ORIGINS == [""]:
-        ALLOWED_ORIGINS = ["http://localhost:3000"]
+        ALLOWED_ORIGINS = ["https://studlyf.in"]
     
     app.add_middleware(
         CORSMiddleware,
