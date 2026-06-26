@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../../AuthContext';
-import { 
+import {
     User, 
     Bell, 
     Shield, 
@@ -29,7 +29,15 @@ import {
     HelpCircle,
     ChevronDown,
     ChevronUp,
-    ShieldAlert
+    ShieldAlert,
+    Award,
+    Trophy,
+    Medal,
+    FileText,
+    AlertCircle,
+    Edit3,
+    X,
+    CheckCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation } from 'react-router-dom';
@@ -54,6 +62,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
         { id: 'communications', label: 'Custom Communications', icon: MessageSquare },
         { id: 'onboarding', label: 'Member Onboarding', icon: Plus },
         { id: 'plan', label: 'Plans & Subscription', icon: CreditCard },
+        { id: 'rules', label: 'Certificate Rules', icon: Award },
     ];
 
     const [plansData, setPlansData] = useState<{ plans: any[]; faqs: any[]; currentPlanId: string; pendingPlan?: { plan_id: string; plan_name: string; queued_at?: string | null; is_upgrade?: boolean; is_downgrade?: boolean }; expiry?: { expires_at: string | null; days_remaining: number | null; is_expired: boolean } } | null>(null);
@@ -67,7 +76,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
     const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
     const [eventPackages, setEventPackages] = useState<any[] | null>(null);
 
-    useEffect(() {
+    useEffect(() => {
         const params = new URLSearchParams(location.search);
         const section = params.get('section');
         if (section) setActiveSection(section);
@@ -1231,9 +1240,359 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
                     </div>
                 );
 
+            case 'rules':
+                return (
+                    <CertificateRulesSection institutionId={institutionId} />
+                );
+
             default:
                 return null;
         }
+    };
+
+    const CertificateRulesSection: React.FC<{ institutionId: string }> = ({ institutionId }) => {
+        const [events, setEvents] = useState<any[]>([]);
+        const [selectedEventId, setSelectedEventId] = useState<string>('');
+        const [rules, setRules] = useState<any[]>([]);
+        const [loading, setLoading] = useState(true);
+        const [saving, setSaving] = useState(false);
+        const [editingRule, setEditingRule] = useState<any | null>(null);
+        const [showForm, setShowForm] = useState(false);
+        const [formData, setFormData] = useState({
+            rule_name: '', rule_description: '', certificate_type: 'winner', rule_type: 'top_n', rule_config: { top_n: 1 }, status: 'active',
+        });
+        const [ruleIdCounter, setRuleIdCounter] = useState(1);
+
+        useEffect(() => { fetchEvents(); }, []);
+        useEffect(() => { if (selectedEventId) fetchRules(); }, [selectedEventId]);
+
+        const fetchEvents = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/v1/institution/events/${institutionId}`, { headers: { ...authHeaders() } });
+                if (res.ok) {
+                    const data = await res.json();
+                    const list = Array.isArray(data) ? data : data?.events || data?.data || [];
+                    setEvents(list);
+                    if (list.length > 0 && !selectedEventId) setSelectedEventId(list[0]._id || list[0].event_id);
+                }
+            } catch { } finally { setLoading(false); }
+        };
+
+        const fetchRules = async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/v1/certificates/rules/?event_id=${selectedEventId}`, { headers: { ...authHeaders() } });
+                if (res.ok) { const data = await res.json(); setRules(Array.isArray(data) ? data : []); }
+                else setRules([]);
+            } catch { setRules([]); }
+        };
+
+        const certificateTypes = [
+            { value: 'winner', label: 'Winner', icon: <Trophy className="w-4 h-4 text-yellow-500" />, defaultCriteria: 'Top 1 Team', defaultRuleType: 'top_n', defaultConfig: { top_n: 1 } },
+            { value: 'runner_up', label: 'Runner Up', icon: <Medal className="w-4 h-4 text-gray-400" />, defaultCriteria: 'Rank 2 - 3', defaultRuleType: 'rank_range', defaultConfig: { rank_start: 2, rank_end: 3 } },
+            { value: 'finalist', label: 'Finalist', icon: <Award className="w-4 h-4 text-orange-500" />, defaultCriteria: 'Rank 4 - 20', defaultRuleType: 'rank_range', defaultConfig: { rank_start: 4, rank_end: 20 } },
+            { value: 'participation', label: 'Participation', icon: <CheckCircle className="w-4 h-4 text-blue-500" />, defaultCriteria: 'All registered participants', defaultRuleType: 'registration_completed', defaultConfig: {} },
+            { value: 'non_qualifier', label: 'Non-Qualifier', icon: <AlertCircle className="w-4 h-4 text-slate-500" />, defaultCriteria: 'Registered, no qualifying score', defaultRuleType: 'submission_completed', defaultConfig: { required_stage: 'final' } },
+        ];
+
+        const statusColors: Record<string, string> = { draft: 'bg-slate-100 text-slate-600', active: 'bg-emerald-100 text-emerald-700', archived: 'bg-amber-100 text-amber-700' };
+
+        const getDefaultConfig = (ruleType: string): any => {
+            switch (ruleType) {
+                case 'top_n': return { top_n: 1 };
+                case 'rank_range': return { rank_start: 1, rank_end: 10 };
+                case 'rank': return { rank: 1 };
+                case 'score_threshold': return { minimum_score: 0 };
+                case 'submission_completed': return { required_stage: '' };
+                case 'stage_completed': return { stage_id: '' };
+                default: return {};
+            }
+        };
+
+        const handleAddRule = () => {
+            setEditingRule(null);
+            setFormData({ rule_name: '', rule_description: '', certificate_type: 'winner', rule_type: 'top_n', rule_config: { top_n: 1 }, status: 'active' });
+            setShowForm(true);
+        };
+
+        const handleEditRule = (rule: any) => {
+            setEditingRule(rule);
+            const ct = certificateTypes.find(t => t.value === rule.certificate_type);
+            const ruleConfig = rule.rule_configuration || ct?.defaultConfig || {};
+            setFormData({
+                rule_name: rule.rule_name || '', rule_description: rule.rule_description || '',
+                certificate_type: rule.certificate_type || 'winner', rule_type: rule.rule_type || ct?.defaultRuleType || 'custom',
+                rule_config: ruleConfig, status: rule.status || 'active',
+            });
+            setShowForm(true);
+        };
+
+        const handleDeleteRule = async (ruleId: string) => {
+            if (!confirm('Delete this rule?')) return;
+            try { const res = await fetch(`${API_BASE_URL}/api/v1/certificates/rules/${ruleId}`, { method: 'DELETE', headers: { ...authHeaders() } }); if (res.ok) fetchRules(); } catch { }
+        };
+
+        const handleSaveRule = async () => {
+            setSaving(true);
+            try {
+                const ct = certificateTypes.find(t => t.value === formData.certificate_type) || certificateTypes[0];
+                const ruleId = editingRule?.rule_id || `rule_${Date.now()}_${ruleIdCounter}`;
+                if (!editingRule) setRuleIdCounter(c => c + 1);
+                const payload = {
+                    rule_id: ruleId, rule_name: formData.rule_name || ct.label,
+                    rule_description: formData.rule_description || '',
+                    rule_category: ['winner', 'runner_up', 'finalist'].includes(formData.certificate_type) ? 'achievement' : 'participation',
+                    rule_type: formData.rule_type, event_id: selectedEventId, certificate_type: formData.certificate_type,
+                    template_id: `default_${formData.certificate_type}`, template_version: 1, status: formData.status, priority: 0,
+                    rule_configuration: typeof formData.rule_config === 'object' ? formData.rule_config : {}, snapshot_required: false, created_by: '', updated_by: '',
+                };
+                const url = editingRule ? `${API_BASE_URL}/api/v1/certificates/rules/${ruleId}` : `${API_BASE_URL}/api/v1/certificates/rules/`;
+                const res = await fetch(url, { method: editingRule ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
+                if (res.ok) { setShowForm(false); setEditingRule(null); fetchRules(); }
+                else { const err = await res.json(); alert(err.detail || 'Failed to save rule'); }
+            } catch { alert('Failed to save rule'); } finally { setSaving(false); }
+        };
+
+        const selectedEvent = events.find((e: any) => (e._id || e.event_id) === selectedEventId);
+
+        if (loading) {
+            return <div className="flex justify-center py-24"><Loader2 className="animate-spin text-[#6C3BFF]" size={32} /></div>;
+        }
+
+        return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-500">
+                <div className="space-y-1 border-b border-slate-100 pb-8">
+                    <h2 className="text-2xl font-black text-slate-800 tracking-tight">Certificate Rules Management</h2>
+                    <p className="text-sm text-slate-400 font-medium">Manage eligibility rules for all events — past, present, and future.</p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                    <div className="flex items-center gap-4">
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Event</label>
+                        <select value={selectedEventId} onChange={(e) => setSelectedEventId(e.target.value)}
+                            className="px-5 py-3 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none min-w-[240px]">
+                            {events.length === 0 && <option value="">No events available</option>}
+                            {events.map((ev: any) => (
+                                <option key={ev._id || ev.event_id} value={ev._id || ev.event_id}>{ev.title || ev.name || ev.event_name}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <button onClick={handleAddRule} className="flex items-center gap-2 px-6 py-3 bg-[#6C3BFF] text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-[#5A2EE5] transition-all shadow-lg shadow-purple-100">
+                        <Plus size={16} /> Add Rule
+                    </button>
+                </div>
+
+                {selectedEvent && events.length > 0 && (
+                    <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+                        <div className="flex items-center gap-3">
+                            <Award className="text-indigo-500" size={20} />
+                            <span className="font-bold text-sm text-indigo-700">Rules for: {selectedEvent.title || selectedEvent.name || selectedEvent.event_name}</span>
+                            <span className="text-xs text-indigo-400 ml-auto">{rules.length} rule{rules.length !== 1 ? 's' : ''}</span>
+                        </div>
+                    </div>
+                )}
+
+                {showForm && (
+                    <div className="bg-white rounded-2xl p-8 border border-slate-200 space-y-6 shadow-sm">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-lg font-bold text-slate-800">{editingRule ? 'Edit Rule' : 'New Rule'}</h3>
+                            <button onClick={() => { setShowForm(false); setEditingRule(null); }} className="p-2 hover:bg-slate-100 rounded-xl transition-all"><X size={18} className="text-slate-400" /></button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rule Name</label>
+                                <input type="text" value={formData.rule_name} onChange={(e) => setFormData(f => ({ ...f, rule_name: e.target.value }))}
+                                    placeholder="e.g., Winner" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none" />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Certificate Type</label>
+                                <select value={formData.certificate_type} onChange={(e) => {
+                                    const ct = certificateTypes.find(t => t.value === e.target.value);
+                                    setFormData(f => ({
+                                        ...f, certificate_type: e.target.value,
+                                        rule_type: ct?.defaultRuleType || 'custom',
+                                        rule_config: ct?.defaultConfig || getDefaultConfig(ct?.defaultRuleType || 'custom'),
+                                    }));
+                                }}
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none">
+                                    {certificateTypes.map(ct => <option key={ct.value} value={ct.value}>{ct.label}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rule Logic</label>
+                                <select value={formData.rule_type} onChange={(e) => {
+                                    const newType = e.target.value;
+                                    setFormData(f => ({
+                                        ...f, rule_type: newType,
+                                        rule_config: ['top_n', 'rank_range', 'rank', 'score_threshold', 'submission_completed', 'stage_completed'].includes(newType)
+                                            ? { ...getDefaultConfig(newType) } : {},
+                                    }));
+                                }}
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none">
+                                    <option value="top_n">Top N</option>
+                                    <option value="rank_range">Rank Range</option>
+                                    <option value="rank">Exact Rank</option>
+                                    <option value="score_threshold">Score Threshold</option>
+                                    <option value="submission_completed">Submission Completed</option>
+                                    <option value="stage_completed">Stage Completed</option>
+                                    <option value="registration_completed">Registration Completed</option>
+                                    <option value="attendance_completed">Attendance Completed</option>
+                                    <option value="custom">Custom (JSON)</option>
+                                </select>
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</label>
+                                <select value={formData.status} onChange={(e) => setFormData(f => ({ ...f, status: e.target.value }))}
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none">
+                                    <option value="active">Active</option><option value="draft">Draft</option><option value="archived">Archived</option>
+                                </select>
+                            </div>
+                        </div>
+                        {formData.rule_type === 'top_n' && (
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Number of Top Positions</label>
+                                <input type="number" min={1} defaultValue={formData.rule_config.top_n ?? 1} key={editingRule?.rule_id || 'new-topn'}
+                                  onBlur={(e) => { const v = parseInt(e.target.value); if (!isNaN(v) && v >= 1) setFormData(f => ({ ...f, rule_config: { ...f.rule_config, top_n: v } })); }}
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none" />
+                            </div>
+                        )}
+                        {formData.rule_type === 'rank_range' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rank Start</label>
+                                    <input type="number" min={1} value={formData.rule_config.rank_start ?? ''} onChange={(e) => setFormData(f => ({ ...f, rule_config: { ...f.rule_config, rank_start: parseInt(e.target.value) || 1 } }))}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none" />
+                                </div>
+                                <div className="space-y-2">
+                                    <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Rank End</label>
+                                    <input type="number" min={1} value={formData.rule_config.rank_end ?? ''} onChange={(e) => setFormData(f => ({ ...f, rule_config: { ...f.rule_config, rank_end: parseInt(e.target.value) || 1 } }))}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none" />
+                                </div>
+                            </div>
+                        )}
+                        {formData.rule_type === 'rank' && (
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Exact Rank</label>
+                                <input type="number" min={1} value={formData.rule_config.rank ?? ''} onChange={(e) => setFormData(f => ({ ...f, rule_config: { ...f.rule_config, rank: parseInt(e.target.value) || 1 } }))}
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none" />
+                            </div>
+                        )}
+                        {formData.rule_type === 'score_threshold' && (
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Minimum Score</label>
+                                <input type="number" min={0} value={formData.rule_config.minimum_score ?? ''} onChange={(e) => setFormData(f => ({ ...f, rule_config: { ...f.rule_config, minimum_score: parseInt(e.target.value) || 0 } }))}
+                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none" />
+                            </div>
+                        )}
+                        {formData.rule_type === 'submission_completed' && (
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Required Stage</label>
+                                <input type="text" value={formData.rule_config.required_stage ?? ''} onChange={(e) => setFormData(f => ({ ...f, rule_config: { ...f.rule_config, required_stage: e.target.value } }))}
+                                    placeholder="e.g., final" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none" />
+                            </div>
+                        )}
+                        {formData.rule_type === 'stage_completed' && (
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Stage ID</label>
+                                <input type="text" value={formData.rule_config.stage_id ?? ''} onChange={(e) => setFormData(f => ({ ...f, rule_config: { ...f.rule_config, stage_id: e.target.value } }))}
+                                    placeholder="Stage identifier" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none" />
+                            </div>
+                        )}
+                        {formData.rule_type === 'custom' && (
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Configuration (JSON)</label>
+                                <textarea value={typeof formData.rule_config === 'object' ? JSON.stringify(formData.rule_config, null, 2) : formData.rule_config}
+                                    onChange={(e) => {
+                                        const val = e.target.value;
+                                        try { setFormData(f => ({ ...f, rule_config: JSON.parse(val) })); }
+                                        catch { setFormData(f => ({ ...f, rule_config: val })); }
+                                    }}
+                                    rows={4} placeholder='{"key": "value"}' className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 font-mono focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none" />
+                            </div>
+                        )}
+                        <div className="space-y-2">
+                            <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Description (optional)</label>
+                            <textarea value={formData.rule_description} onChange={(e) => setFormData(f => ({ ...f, rule_description: e.target.value }))} rows={2}
+                                placeholder="Internal notes about this rule..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 focus:ring-2 focus:ring-purple-100 focus:border-[#6C3BFF] outline-none" />
+                        </div>
+                        <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+                            <button onClick={() => { setShowForm(false); setEditingRule(null); }}
+                                className="px-6 py-3 bg-white border border-slate-200 text-slate-600 text-sm font-semibold rounded-xl hover:bg-slate-50 transition-all">Cancel</button>
+                            <button onClick={handleSaveRule} disabled={saving}
+                                className="flex items-center gap-2 px-8 py-3 bg-[#6C3BFF] text-white text-sm font-semibold rounded-xl hover:bg-[#5A2EE5] transition-all shadow-lg shadow-purple-100 disabled:opacity-50">
+                                {saving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                                {editingRule ? 'Update Rule' : 'Create Rule'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+                    {events.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                            <Award size={48} className="mb-4 opacity-30" />
+                            <p className="font-bold text-sm">No events found</p>
+                            <p className="text-xs mt-1">Create an event first to manage certificate rules.</p>
+                        </div>
+                    ) : rules.length === 0 ? (
+                        <div className="flex flex-col items-center justify-center py-16 text-slate-400">
+                            <Award size={48} className="mb-4 opacity-30" />
+                            <p className="font-bold text-sm">No rules defined for this event</p>
+                            <p className="text-xs mt-1">Click "Add Rule" to create certificate eligibility rules.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                        <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Rule Name</th>
+                                        <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Certificate Type</th>
+                                        <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Criteria</th>
+                                        <th className="text-left px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Status</th>
+                                        <th className="text-right px-6 py-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {rules.map((rule: any) => {
+                                        const ct = certificateTypes.find(t => t.value === rule.certificate_type);
+                                        return (
+                                            <tr key={rule.rule_id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-all">
+                                                <td className="px-6 py-4"><div className="font-semibold text-slate-800">{rule.rule_name}</div></td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-2">
+                                                        {ct?.icon}
+                                                        <span className="text-sm font-medium text-slate-700">{ct?.label || rule.certificate_type}</span>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-sm text-slate-500">
+                                                  {rule.rule_type === 'top_n' ? `Top ${rule.rule_configuration?.top_n ?? '?'}` :
+                                                   rule.rule_type === 'rank_range' ? `Rank ${rule.rule_configuration?.rank_start ?? '?'} - ${rule.rule_configuration?.rank_end ?? '?'}` :
+                                                   rule.rule_type === 'rank' ? `Rank ${rule.rule_configuration?.rank ?? '?'}` :
+                                                   rule.rule_type === 'score_threshold' ? `Score ≥ ${rule.rule_configuration?.minimum_score ?? '?'}` :
+                                                   rule.rule_type === 'submission_completed' ? `On ${rule.rule_configuration?.required_stage ?? '?'} submit` :
+                                                   rule.rule_type === 'stage_completed' ? `Stage ${rule.rule_configuration?.stage_id ?? '?'} done` :
+                                                   rule.rule_type === 'registration_completed' ? 'Registered' :
+                                                   rule.rule_type === 'attendance_completed' ? 'Attended' :
+                                                   rule.rule_description || '-'}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <span className={`inline-flex px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${statusColors[rule.status] || 'bg-slate-100 text-slate-600'}`}>{rule.status}</span>
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <button onClick={() => handleEditRule(rule)} className="p-2 hover:bg-slate-100 rounded-lg transition-all text-slate-400 hover:text-indigo-600"><Edit3 size={16} /></button>
+                                                        <button onClick={() => handleDeleteRule(rule.rule_id)} className="p-2 hover:bg-red-50 rounded-lg transition-all text-slate-400 hover:text-red-500"><Trash2 size={16} /></button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
     };
 
     return (

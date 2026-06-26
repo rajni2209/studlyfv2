@@ -242,6 +242,9 @@ class InstitutionalCertificateService:
                         course_title=event_title,
                         issue_date=issue_date,
                         certificate_id=cert_id,
+                        achievement_label=achievement_label,
+                        rank=rank or '',
+                        cert_type=achievement_type,
                     )
                 except Exception as e:
                     print(f"[TEMPLATE ERROR] Rendering failed for template {template_id}: {e}")
@@ -293,6 +296,13 @@ class InstitutionalCertificateService:
             team_id=team_id,
             pdf_path=pdf_path,
         )
+        existing = await event_certificates_col.find_one({
+            "event_id": event_id, "user_id": user_id, "achievement_key": achievement_type
+        })
+        if existing:
+            existing["_id"] = str(existing["_id"])
+            return existing
+
         await event_certificates_col.insert_one(record)
         record["_id"] = str(record["_id"])
 

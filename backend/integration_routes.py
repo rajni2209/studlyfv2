@@ -4769,6 +4769,39 @@ async def upload_event_media(
     return {"url": data_url, "field": field}
 
 
+UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOADS_DIR, exist_ok=True)
+
+
+@router.post("/uploads")
+async def upload_file(
+    file: UploadFile = File(...),
+    user: dict = Depends(get_auth_user)
+):
+    ext = os.path.splitext(file.filename or "image.png")[1].lower()
+    allowed = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".svg"}
+    if ext not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {ext}")
+
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="File size exceeds 10MB limit")
+
+    import base64
+    mime = "image/png"
+    if ext in (".jpg", ".jpeg"):
+        mime = "image/jpeg"
+    elif ext == ".webp":
+        mime = "image/webp"
+    elif ext == ".gif":
+        mime = "image/gif"
+    elif ext == ".svg":
+        mime = "image/svg+xml"
+    data_url = f"data:{mime};base64,{base64.b64encode(content).decode()}"
+
+    return {"url": data_url}
+
+
 @router.post("/upload-media")
 async def upload_institution_media(
     file: UploadFile = File(...),

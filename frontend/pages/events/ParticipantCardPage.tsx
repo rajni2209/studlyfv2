@@ -15,6 +15,8 @@ const ParticipantCardPage: React.FC = () => {
     const [error, setError] = useState('');
     const [card, setCard] = useState<any>(null);
     const [portal, setPortal] = useState<any>(null);
+  const [cardConfig, setCardConfig] = useState<any>(null);
+  const [sponsors, setSponsors] = useState<any[]>([]);
     const [regId, setRegId] = useState('');
     const [bulletOne, setBulletOne] = useState('');
     const [bulletTwo, setBulletTwo] = useState('');
@@ -26,6 +28,21 @@ const ParticipantCardPage: React.FC = () => {
     const posterRef = useRef<HTMLDivElement>(null);
 
     const participantId = user?.user_id || user?._id || '';
+
+    const formatDate = (iso: string) => {
+        const d = new Date(iso);
+        if (isNaN(d.getTime())) return iso;
+        return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    };
+
+    const formatEventDates = (raw: string) => {
+        if (!raw) return 'TBA';
+        const parts = raw.split(' - ').filter(Boolean);
+        if (parts.length === 2) {
+            return `${formatDate(parts[0])} - ${formatDate(parts[1])}`;
+        }
+        return formatDate(raw);
+    };
 
     const load = async () => {
         if (!eventId || !participantId) return;
@@ -45,6 +62,8 @@ const ParticipantCardPage: React.FC = () => {
                 setBulletTwo(bullets[1] || '');
                 setBulletThree(bullets[2] || '');
                 setLinkedinPost(c.linkedinPost || '');
+                setCardConfig(c.cardConfig || null);
+                setSponsors(Array.isArray(c.sponsors) ? c.sponsors : []);
             } else {
                 const data = await cardRes.json().catch(() => ({}));
                 throw new Error(data.detail || 'Could not load participant card');
@@ -64,9 +83,8 @@ const ParticipantCardPage: React.FC = () => {
     }, [eventId, participantId]);
 
     const sponsorNames = useMemo(() => {
-        const list = portal?.config?.sponsors;
-        return Array.isArray(list) ? list : [];
-    }, [portal]);
+        return sponsors.length > 0 ? sponsors : (Array.isArray(portal?.config?.sponsors) ? portal.config.sponsors : []);
+    }, [sponsors, portal]);
 
     const generateLinkedIn = () => {
         const bullets = [bulletOne, bulletTwo, bulletThree].filter(Boolean);
@@ -92,7 +110,6 @@ const ParticipantCardPage: React.FC = () => {
                 body: JSON.stringify({
                     event_id: eventId,
                     participant_id: participantId,
-                    reg_id: regId,
                     bullet_points: [bulletOne, bulletTwo, bulletThree].filter(Boolean),
                     linkedin_post: linkedinPost,
                 }),
@@ -172,7 +189,7 @@ const ParticipantCardPage: React.FC = () => {
                         <div>
                             <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6C3BFF]">Participant Card</p>
                             <h1 className="text-3xl font-black tracking-tight">{card.eventName}</h1>
-                            <p className="text-slate-500 font-medium mt-1">Edit your Reg ID, bullet points, and LinkedIn draft for this event.</p>
+                            <p className="text-slate-500 font-medium mt-1">Edit your bullet points and LinkedIn draft for this event.</p>
                         </div>
                     </div>
                     <div className="flex gap-3">
@@ -189,45 +206,12 @@ const ParticipantCardPage: React.FC = () => {
 
                 {error && <div className="p-4 rounded-2xl bg-red-50 border border-red-100 text-red-700 font-medium">{error}</div>}
 
-                <section className="grid grid-cols-1 lg:grid-cols-[0.9fr_1.1fr] gap-6">
-                    <div className="p-6 rounded-[2rem] bg-gradient-to-br from-[#2A1758] to-[#7c154b] text-white shadow-2xl space-y-4">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 text-[10px] font-black uppercase tracking-[0.25em]">
-                            <Users size={14} /> {card.role || 'Participant'}
-                        </div>
-                        <div>
-                            <p className="text-white/70 text-sm">{card.participantName}</p>
-                            <h2 className="text-3xl font-black tracking-tight mt-1">{card.eventName}</h2>
-                            <p className="text-white/80 mt-2">{card.college}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                            <div className="p-4 rounded-2xl bg-white/10 border border-white/10">
-                                <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.25em]">Team</p>
-                                <p className="font-bold mt-1">{card.teamName || 'Independent'}</p>
-                            </div>
-                            <div className="p-4 rounded-2xl bg-white/10 border border-white/10">
-                                <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.25em]">Reg ID</p>
-                                <p className="font-bold mt-1">{regId || 'Not set'}</p>
-                            </div>
-                        </div>
-                        <div className="p-4 rounded-2xl bg-white/10 border border-white/10">
-                            <p className="text-white/60 text-[10px] font-black uppercase tracking-[0.25em] mb-2">Sponsors</p>
-                        <div className="flex flex-wrap gap-3 items-center">
-                            {sponsorNames.length > 0 ? sponsorNames.map((s: any, idx: number) => (
-                                s.logo ? (
-                                    <img key={idx} src={s.logo} alt={s.name || s.label || 'Sponsor'} className="h-8 max-w-24 object-contain bg-white rounded-lg px-2 py-1 border border-white/20" title={s.name || s.label} />
-                                ) : (
-                                    <span key={idx} className="px-3 py-1 rounded-full bg-white text-slate-900 text-xs font-bold">{s.name || s.label || 'Sponsor'}</span>
-                                )
-                            )) : <span className="text-white/70 text-sm">No sponsor list configured.</span>}
-                        </div>
-                        </div>
-                    </div>
-
-                        <div className="space-y-6">
+                <section className="space-y-6">
+                        <div className="max-w-2xl mx-auto space-y-6">
                             <div className="p-6 rounded-[2rem] bg-white border border-slate-200 shadow-sm space-y-4">
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400">Reg ID</p>
-                                    <input value={regId} onChange={e => setRegId(e.target.value)} placeholder="Last 4-6 digits or event reg ID" className="mt-2 w-full p-4 rounded-2xl border border-slate-200 bg-slate-50 outline-none" />
+                                    <p className="mt-2 w-full p-4 rounded-2xl border border-slate-200 bg-slate-100 text-slate-600 font-bold">{regId || 'Not assigned yet'}</p>
                                 </div>
                                 <div>
                                     <p className="text-[10px] font-black uppercase tracking-[0.25em] text-slate-400 mb-2">Profile photo</p>
@@ -246,14 +230,14 @@ const ParticipantCardPage: React.FC = () => {
                                 </button>
                             </div>
 
-                        <div className="p-6 rounded-[2rem] bg-white border border-slate-200 shadow-sm space-y-3">
-                            <div className="flex items-center gap-2">
-                                <Linkedin size={18} className="text-[#6C3BFF]" />
-                                <h3 className="text-lg font-black">LinkedIn post draft</h3>
+                            <div className="p-6 rounded-[2rem] bg-white border border-slate-200 shadow-sm space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <Linkedin size={18} className="text-[#6C3BFF]" />
+                                    <h3 className="text-lg font-black">LinkedIn post draft</h3>
+                                </div>
+                                <textarea value={linkedinPost} onChange={e => setLinkedinPost(e.target.value)} rows={10} className="w-full p-4 rounded-2xl border border-slate-200 bg-slate-50 outline-none font-mono text-sm leading-relaxed" placeholder="Generate or paste your LinkedIn post..." />
                             </div>
-                            <textarea value={linkedinPost} onChange={e => setLinkedinPost(e.target.value)} rows={10} className="w-full p-4 rounded-2xl border border-slate-200 bg-slate-50 outline-none font-mono text-sm leading-relaxed" placeholder="Generate or paste your LinkedIn post..." />
                         </div>
-                    </div>
                 </section>
 
                 <section className="p-6 rounded-[2rem] bg-white border border-slate-200 shadow-sm space-y-4">
@@ -264,15 +248,22 @@ const ParticipantCardPage: React.FC = () => {
                             {downloading ? 'Rendering…' : 'Download Poster'}
                         </button>
                     </div>
-                    <div ref={posterRef} className="bg-[#fdfae7] rounded-2xl overflow-hidden border border-slate-200 p-4 space-y-3 text-center" style={{ fontFamily: 'Poppins, sans-serif' }}>
-                        <div className="text-[10px] font-black uppercase tracking-widest text-orange-600">India's Largest Summer AI Hackathon</div>
-                        <div className="text-2xl font-black tracking-tighter">{card.eventName}</div>
+                    <div ref={posterRef} className="rounded-2xl overflow-hidden border border-slate-200 p-4 space-y-3 text-center mx-auto max-w-sm"
+                         style={{
+                             background: cardConfig?.posterStyle?.background || '#fdfae7',
+                             fontFamily: 'Poppins, sans-serif',
+                         }}>
+                        <div className="text-[10px] font-black uppercase tracking-widest"
+                             style={{ color: cardConfig?.posterStyle?.accentColor || '#ea580c' }}>
+                            {cardConfig?.posterStyle?.headerText || "India's Largest Summer AI Hackathon"}
+                        </div>
+                        <div className="text-2xl font-black tracking-tighter text-slate-900">{card.eventName}</div>
                         <div className="flex items-center justify-center gap-4">
                             <div className="w-16 h-16 rounded-full bg-slate-200 overflow-hidden shrink-0 border-2 border-white">
                                 {photo ? <img src={photo} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-200" />}
                             </div>
                             <div className="text-left">
-                                <div className="font-black text-orange-600">{card.participantName}</div>
+                                <div className="font-black" style={{ color: cardConfig?.posterStyle?.accentColor || '#ea580c' }}>{card.participantName}</div>
                                 <div className="text-xs font-semibold text-slate-600">{card.college}</div>
                                 <div className="text-xs font-bold text-slate-500">{card.role}</div>
                                 {regId && <div className="text-[10px] font-mono font-bold text-slate-400">REG: {regId}</div>}
@@ -281,7 +272,7 @@ const ParticipantCardPage: React.FC = () => {
                         {[bulletOne, bulletTwo, bulletThree].filter(Boolean).length > 0 && (
                             <div className="text-left space-y-1 text-sm text-slate-700">
                                 {[bulletOne, bulletTwo, bulletThree].filter(Boolean).map((b, i) => (
-                                    <div key={i} className="flex items-start gap-2"><span className="text-orange-500">•</span><span>{b}</span></div>
+                                    <div key={i} className="flex items-start gap-2"><span style={{ color: cardConfig?.posterStyle?.accentColor || '#ea580c' }}>•</span><span>{b}</span></div>
                                 ))}
                             </div>
                         )}
@@ -297,13 +288,24 @@ const ParticipantCardPage: React.FC = () => {
                                 ))}
                             </div>
                         )}
+                        {(cardConfig?.links || []).length > 0 && (
+                            <div className="pt-2 border-t border-slate-200 flex flex-col items-center gap-2">
+                                {(cardConfig?.links || []).map((link: any, idx: number) => (
+                                    <a key={idx} href={link.url} target="_blank" rel="noopener noreferrer"
+                                       className="inline-block px-4 py-2 rounded-full text-xs font-bold text-white transition-colors"
+                                       style={{ background: cardConfig?.posterStyle?.accentColor || '#ea580c' }}>
+                                        {link.label || link.url}
+                                    </a>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 </section>
 
                 <section className="p-6 rounded-[2rem] bg-white border border-slate-200 shadow-sm">
                     <p className="text-[10px] font-black uppercase tracking-[0.25em] text-[#6C3BFF] mb-3">Event metadata</p>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100"><span className="block text-slate-400 text-[10px] uppercase tracking-[0.25em]">Dates</span><strong>{card.eventDates || 'TBA'}</strong></div>
+                        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100"><span className="block text-slate-400 text-[10px] uppercase tracking-[0.25em]">Dates</span><strong>{formatEventDates(card.eventDates)}</strong></div>
                         <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100"><span className="block text-slate-400 text-[10px] uppercase tracking-[0.25em]">Venue</span><strong>{card.eventVenue || 'TBA'}</strong></div>
                         <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100"><span className="block text-slate-400 text-[10px] uppercase tracking-[0.25em]">Email</span><strong className="truncate">{card.email}</strong></div>
                     </div>

@@ -250,7 +250,7 @@ const InstitutionDashboard: React.FC = () => {
             case 'downloads':
                 return <DownloadsPage institutionId={institutionId} onNavigate={setActiveTab} />;
             case 'certificates':
-                return <CertificatesPage institutionId={institutionId} />;
+                return <CertificatesPage institutionId={institutionId} onNavigate={handleTabChange} />;
             case 'settings':
                 return <SettingsPage institutionId={institutionId} onProfileUpdate={handleProfileUpdate} />;
             case 'dashboard':

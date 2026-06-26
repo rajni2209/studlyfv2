@@ -65,6 +65,9 @@ async def get_participant_card(
     if user:
         profile_image = user.get("profile_image") or user.get("avatar") or user.get("photo") or None
 
+    card_config = event.get("participant_card_config") or {}
+    sponsors = event.get("sponsors") or []
+
     card_data = {
         "participantName": participant.get("name", "Participant"),
         "email": participant.get("email", ""),
@@ -79,6 +82,8 @@ async def get_participant_card(
         "regId": participant.get("reg_id") or participant.get("registration_id") or "",
         "bulletPoints": participant.get("bullet_points") or [],
         "linkedinPost": participant.get("linkedin_post") or "",
+        "cardConfig": card_config,
+        "sponsors": sponsors,
     }
 
     if event:

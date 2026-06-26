@@ -419,7 +419,7 @@ const OpportunitiesList: React.FC = () => {
                         ))}
                     </div>
 
-                    <div className="flex items-center shrink-0">
+                    <div className="flex items-center shrink-0 gap-2">
                         <button
                             onClick={() => setIsFilterDropdownOpen((v) => !v)}
                             className={`inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${isFilterDropdownOpen
@@ -431,6 +431,13 @@ const OpportunitiesList: React.FC = () => {
                             <motion.div animate={{ rotate: isFilterDropdownOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
                                 <ChevronDown size={14} />
                             </motion.div>
+                        </button>
+                        
+                        <button
+                            onClick={() => navigate('/dashboard/institution?post=true')}
+                            className="inline-flex items-center gap-2 px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest bg-slate-900 text-white border border-slate-900 hover:bg-slate-800 transition-all"
+                        >
+                            <Plus size={14} /> Post Opportunity
                         </button>
                     </div>
                 </div>

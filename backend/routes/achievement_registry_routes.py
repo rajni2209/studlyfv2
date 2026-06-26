@@ -49,6 +49,8 @@ async def _get_leaderboard_for_event(event_id: str, stage_id: str | None = None)
         scores_by_sub.setdefault(sid, []).append(total)
 
     entries = []
+    team_ids_to_resolve = set()
+    name_lookup_ids = set()
     for sub in submissions:
         sid = str(sub.get("_id"))
         total = float(sub.get("total_score") or sub.get("evaluation_score") or 0)
@@ -66,16 +68,70 @@ async def _get_leaderboard_for_event(event_id: str, stage_id: str | None = None)
                     if isinstance(v, str) and len(v) > 3:
                         title = v
                         break
+        team_name = sub.get("team_name") or ""
+        if not team_name and team_id:
+            team_ids_to_resolve.add(team_id)
+        user_name = sub.get("user_name") or sub.get("name") or ""
+        if not user_name:
+            name_lookup_ids.add(user_id)
         entry = {
             "submission_id": sid,
             "user_id": user_id,
             "team_id": team_id,
             "title": title or sub.get("title") or sub.get("project_name") or sub.get("project_title") or "Untitled",
             "score": round(total, 1),
-            "user_name": sub.get("user_name") or sub.get("name") or "Participant",
-            "team_name": sub.get("team_name") or "",
+            "user_name": user_name or "Participant",
+            "team_name": team_name,
         }
         entries.append(entry)
+
+    # Resolve team names
+    if team_ids_to_resolve:
+        team_docs = await teams_col.find({"_id": {"$in": [ObjectId(tid) if ObjectId.is_valid(tid) else tid for tid in team_ids_to_resolve]}}).to_list(length=None)
+        team_map = {}
+        for td in team_docs:
+            tid = str(td["_id"])
+            team_map[tid] = td.get("team_name") or td.get("name") or ""
+        for e in entries:
+            tid = e.get("team_id", "")
+            if not e["team_name"] and tid in team_map:
+                e["team_name"] = team_map[tid]
+
+    # Resolve user names from users_col for missing names
+    if name_lookup_ids:
+        user_docs = await users_col.find({"user_id": {"$in": list(name_lookup_ids)}}, {"user_id": 1, "full_name": 1, "name": 1}).to_list(length=None)
+        user_name_map = {}
+        for ud in user_docs:
+            uid = ud.get("user_id", "")
+            user_name_map[uid] = ud.get("full_name") or ud.get("name") or ""
+        for e in entries:
+            if e["user_name"] == "Participant" and e["user_id"] in user_name_map:
+                e["user_name"] = user_name_map[e["user_id"]]
+
+    # Expand team entries to include team members
+    team_member_ids = set()
+    for e in entries:
+        tid = e.get("team_id", "")
+        if tid:
+            team_member_ids.add(tid)
+    if team_member_ids:
+        team_docs = await teams_col.find({"_id": {"$in": [ObjectId(tid) if ObjectId.is_valid(tid) else tid for tid in team_member_ids]}}).to_list(length=None)
+        team_member_map = {}
+        for td in team_docs:
+            tid = str(td["_id"])
+            members = td.get("members") or td.get("team_members") or []
+            team_member_map[tid] = []
+            for m in members:
+                mid = str(m.get("user_id") or "")
+                if mid:
+                    team_member_map[tid].append({
+                        "user_id": mid,
+                        "user_name": m.get("name") or m.get("full_name") or m.get("user_name") or "Team Member",
+                    })
+        for e in entries:
+            tid = e.get("team_id", "")
+            if tid in team_member_map:
+                e["member_ids"] = team_member_map[tid]
 
     entries.sort(key=lambda x: x["score"], reverse=True)
     for idx, e in enumerate(entries):
@@ -100,13 +156,18 @@ async def get_certificate_stats(
     ach = await event_certificates_col.count_documents({**match, "achievement_key": {"$in": achievement_keys}})
     part = await event_certificates_col.count_documents({**match, "achievement_key": "participation"})
     pending = await event_certificates_col.count_documents({**match, "$or": [{"status": "Pending"}, {"status": {"$exists": False}}]})
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+    verified_today = await event_certificates_col.count_documents({
+        **match, "status": "verified", "verified_at": {"$gte": today_start}
+    })
+    revoked = await event_certificates_col.count_documents({**match, "status": "revoked"})
     return {
         "total": total,
         "achievement": ach,
         "participation": part,
-        "verified_today": 0,
+        "verified_today": verified_today,
         "pending": pending,
-        "revoked": 0,
+        "revoked": revoked,
     }
 
 
@@ -273,28 +334,42 @@ async def issue_certificates(
 
         if not user_id:
             continue
-        existing = await event_certificates_col.find_one({
-            "event_id": event_id,
-            "user_id": user_id,
-            "achievement_key": achievement_type,
-        })
-        if existing:
-            continue
-        record = await certificate_service.issue_event_certificate(
-            event_id=event_id,
-            user_id=user_id,
-            participant_name=participant_name,
-            event_title=event_title,
-            organization_name=org_name,
-            event_date=event_date,
-            achievement_type=achievement_type,
-            event_code=event_code,
-            institution_id=institution_id,
-            rank=rank,
-            team_id=team_id or None,
-            template_id=template_id, # ADDED
-        )
-        issued.append(record)
+
+        # Collect all recipients: the submitter + team members (if applicable)
+        recipients_to_issue = [(user_id, participant_name)]
+        if team_id:
+            team_doc = await teams_col.find_one({"_id": to_oid(team_id)})
+            if team_doc:
+                members = team_doc.get("members") or team_doc.get("team_members") or []
+                for m in members:
+                    mid = str(m.get("user_id") or "")
+                    if mid and mid != user_id:
+                        mname = m.get("name") or m.get("full_name") or m.get("user_name") or "Team Member"
+                        recipients_to_issue.append((mid, mname))
+
+        for issue_user_id, issue_name in recipients_to_issue:
+            existing = await event_certificates_col.find_one({
+                "event_id": event_id,
+                "user_id": issue_user_id,
+                "achievement_key": achievement_type,
+            })
+            if existing:
+                continue
+            record = await certificate_service.issue_event_certificate(
+                event_id=event_id,
+                user_id=issue_user_id,
+                participant_name=issue_name,
+                event_title=event_title,
+                organization_name=org_name,
+                event_date=event_date,
+                achievement_type=achievement_type,
+                event_code=event_code,
+                institution_id=institution_id,
+                rank=rank,
+                team_id=team_id or None,
+                template_id=template_id,
+            )
+            issued.append(record)
 
         if send_email:
             try:
@@ -381,6 +456,31 @@ async def get_certificate_registry(
     return result
 
 
+@router.post("/revoke")
+async def revoke_certificate(
+    payload: dict = Body(...),
+    user: dict = Depends(get_auth_user),
+):
+    """Revoke a certificate by certificate_id and event_id."""
+    role = str(user.get("role") or "").lower()
+    if role not in ("institution", "admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Institution access required")
+
+    certificate_id = payload.get("certificate_id")
+    event_id = payload.get("event_id")
+    if not certificate_id or not event_id:
+        raise HTTPException(status_code=400, detail="certificate_id and event_id required")
+
+    result = await event_certificates_col.update_one(
+        {"certificate_id": certificate_id, "event_id": event_id},
+        {"$set": {"status": "revoked", "revoked_at": datetime.utcnow().isoformat()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Certificate not found")
+
+    return {"status": "success", "message": "Certificate revoked"}
+
+
 # Template Builder Endpoints
 @router.get("/templates")
 async def list_cert_templates_for_institution(user: dict = Depends(get_auth_user)):
@@ -403,6 +503,7 @@ async def create_cert_template_for_institution(payload: dict = Body(...), user: 
         "html_content": payload.get("html_content", ""),
         "description": payload.get("description", ""),
         "preview_thumbnail": payload.get("preview_thumbnail", ""),
+        "cert_data": payload.get("cert_data", {}),
         "created_at": datetime.utcnow().isoformat(),
         "created_by": str(user.get("user_id") or user.get("email") or ""),
         "is_builtin": False,
@@ -436,6 +537,7 @@ async def update_cert_template_for_institution(
         "html_content": payload.get("html_content", existing.get("html_content", "")),
         "description": payload.get("description", existing.get("description", "")),
         "preview_thumbnail": payload.get("preview_thumbnail", existing.get("preview_thumbnail", "")),
+        "cert_data": payload.get("cert_data", existing.get("cert_data", {})),
         "updated_at": datetime.utcnow().isoformat(),
     }
     
@@ -447,6 +549,24 @@ async def update_cert_template_for_institution(
     updated = await cert_templates_col.find_one({"template_id": template_id})
     updated["_id"] = str(updated.get("_id", ""))
     return updated
+
+@router.delete("/clear")
+async def clear_certificates_for_event(
+    event_id: str = Query(...),
+    user: dict = Depends(get_auth_user),
+):
+    """Delete all certificates for an event (so admin can re-issue fresh)."""
+    role = str(user.get("role") or "").lower()
+    if role not in ("institution", "admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Institution access required")
+
+    result = await event_certificates_col.delete_many({"event_id": event_id})
+    return {
+        "status": "success",
+        "deleted_count": result.deleted_count,
+        "message": f"Deleted {result.deleted_count} certificates for event {event_id}",
+    }
+
 
 @router.delete("/templates/{template_id}")
 async def delete_cert_template_for_institution(

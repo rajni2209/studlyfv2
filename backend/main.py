@@ -821,6 +821,7 @@ from routes import stage_navigation_routes, team_join_request_routes, hackathon_
 from routes import student_features_routes
 from routes import event_certificate_routes, registration_flow_routes
 from routes import achievement_registry_routes
+from routes import eligibility_rule_routes
 
 import hackathon_integration_routes
 import participant_card_routes
@@ -897,9 +898,12 @@ app.include_router(student_features_routes.router)
 app.include_router(hackathon_integration_routes.router)
 app.include_router(hackathon_public_routes.router)
 app.include_router(participant_card_routes.router)
+from routes.participant_card_admin_routes import router as participant_card_admin_router
+app.include_router(participant_card_admin_router)
 app.include_router(event_certificate_routes.router)
 app.include_router(event_certificate_routes.verification_router)
 app.include_router(achievement_registry_routes.router)
+app.include_router(eligibility_rule_routes.router)
 app.include_router(registration_flow_routes.router)
 app.include_router(stage_endpoints.router)
 from routes import company_simulator

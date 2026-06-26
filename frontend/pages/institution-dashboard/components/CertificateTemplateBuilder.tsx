@@ -1,5 +1,5 @@
-import React, { useState, useRef } from 'react';
-import { Plus, Trash2, Eye, EyeOff, Save, ChevronLeft, Upload } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Plus, Trash2, Eye, EyeOff, Save, ChevronLeft, Upload, Edit3 } from 'lucide-react';
 import { CERT_TEMPLATES, CertData } from './CertTemplates';
 import { API_BASE_URL, authHeaders } from '../../../apiConfig';
 
@@ -7,14 +7,70 @@ import { API_BASE_URL, authHeaders } from '../../../apiConfig';
 const uploadFile = async (file: File): Promise<string> => {
   const formData = new FormData();
   formData.append('file', file);
-  const res = await fetch(`${API_BASE_URL}/api/v1/institution/uploads`, {
+  const res = await fetch(`/api/v1/institution/uploads`, {
     method: 'POST',
-    headers: authHeaders(), // Assuming this handles multipart or isn't needed
+    headers: authHeaders(),
     body: formData
   });
   if (!res.ok) throw new Error('Upload failed');
   const data = await res.json();
   return data.url;
+};
+
+// Validated Date Field for DD-MM-YYYY
+const ValidatedDateField = ({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) => {
+  const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("Invalid date (Use DD-MM-YYYY)");
+
+  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value.replace(/[^0-9]/g, ''); // Numeric only
+    
+    // Basic split
+    const d = raw.substring(0, 2);
+    const m = raw.substring(2, 4);
+    const y = raw.substring(4, 8);
+
+    // Build formatted string
+    let formatted = d;
+    if (m.length > 0) formatted += '-' + m;
+    if (y.length > 0) formatted += '-' + y;
+
+    onChange(formatted);
+
+    // Real-time Validation
+    let isValid = true;
+    let msg = "Invalid date (Use DD-MM-YYYY)";
+    
+    if (d && (parseInt(d) < 1 || parseInt(d) > 31)) {
+        isValid = false;
+        msg = "Day must be 01-31";
+    } else if (m && (parseInt(m) < 1 || parseInt(m) > 12)) {
+        isValid = false;
+        msg = "Month must be 01-12";
+    } else if (raw.length === 8) {
+        const fullRegex = /^(0[1-9]|[12][0-9]|3[01])(0[1-9]|1[0-2])\d{4}$/;
+        if (!fullRegex.test(raw)) {
+            isValid = false;
+            msg = "Invalid date format";
+        }
+    }
+    
+    setError(!isValid && raw.length > 0);
+    setErrorMessage(msg);
+  };
+
+  return (
+      <div className="space-y-1">
+          <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
+          <input 
+            value={value} 
+            onChange={handleInput} 
+            placeholder="DD-MM-YYYY"
+            maxLength={10}
+            className={`w-full px-3 py-2.5 bg-slate-50 border ${error ? 'border-red-300' : 'border-slate-100'} rounded-xl text-sm font-medium focus:outline-none focus:border-[#6C3BFF] transition-all`} />
+          {error && <p className="text-[9px] text-red-500 font-bold">{errorMessage}</p>}
+      </div>
+  );
 };
 
 const DEFAULT: CertData = {
@@ -101,12 +157,18 @@ const buildHtmlContent = (data: CertData, templateLabel?: string) => {
 <body>
   <div class="certificate">
     <div class="top">
-      <div style="width:96px;height:96px;border:2px dashed #CBD5E1;border-radius:16px;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-size:10px;font-weight:800;color:#94A3B8;">INST</div>
+      ${data.institutionLogo
+        ? `<img src="${data.institutionLogo}" alt="Institution Logo" style="width:96px;height:96px;object-fit:contain;border-radius:16px;" />`
+        : `<div style="width:96px;height:96px;border:2px dashed #CBD5E1;border-radius:16px;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-size:10px;font-weight:800;color:#94A3B8;">INST</div>`
+      }
       <div class="title">
         <div class="institution">${data.institutionName || 'Institution Name'}</div>
         <div class="template">${templateLabel || data.certType || 'Certificate Template'}</div>
       </div>
-      <div style="width:96px;height:96px;border:2px dashed #CBD5E1;border-radius:16px;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-size:10px;font-weight:800;color:#94A3B8;">EVENT</div>
+      ${data.eventLogo
+        ? `<img src="${data.eventLogo}" alt="Event Logo" style="width:96px;height:96px;object-fit:contain;border-radius:16px;" />`
+        : `<div style="width:96px;height:96px;border:2px dashed #CBD5E1;border-radius:16px;display:flex;align-items:center;justify-content:center;font-family:'Poppins',sans-serif;font-size:10px;font-weight:800;color:#94A3B8;">EVENT</div>`
+      }
     </div>
     <div class="heading">CERTIFICATE</div>
     <div class="cert-type">${data.certType || 'Certificate of Participation'}</div>
@@ -124,11 +186,44 @@ const buildHtmlContent = (data: CertData, templateLabel?: string) => {
 </html>`;
 };
 
+interface SavedTemplate {
+  template_id: string;
+  name: string;
+  description?: string;
+  html_content?: string;
+  cert_data?: CertData;
+  created_at?: string;
+}
+
 const CertificateTemplateBuilder: React.FC<{ institutionId: string; onSave?: (data: CertData, templateId: string) => void }> = ({ institutionId, onSave }) => {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [data, setData] = useState<CertData>(DEFAULT);
   const [showPreview, setShowPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savedTemplates, setSavedTemplates] = useState<SavedTemplate[]>([]);
+  const [savedTemplateId, setSavedTemplateId] = useState<string | null>(null);
+  const [loadingSaved, setLoadingSaved] = useState(true);
+
+  useEffect(() => {
+    fetchSavedTemplates();
+  }, []);
+
+  const fetchSavedTemplates = async () => {
+    setLoadingSaved(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/v1/institution/certificates/templates`, {
+        headers: authHeaders(),
+      });
+      if (res.ok) {
+        const list: SavedTemplate[] = await res.json();
+        setSavedTemplates(list.filter(t => t.cert_data));
+      } else {
+        const err = await res.json().catch(() => ({ detail: 'Failed to load templates' }));
+        alert('Could not load saved templates: ' + (err.detail || 'Server error'));
+      }
+    } catch (e) { alert('Could not load saved templates. Check your connection.'); }
+    setLoadingSaved(false);
+  };
 
   const set = (patch: Partial<CertData>) => setData(d => ({ ...d, ...patch }));
   const addSig = () => set({ signatories: [...data.signatories, { name: '', title: '', org: '' }] });
@@ -140,61 +235,124 @@ const CertificateTemplateBuilder: React.FC<{ institutionId: string; onSave?: (da
     setSaving(true);
     try {
       const selected = CERT_TEMPLATES.find(t => t.id === selectedId);
-      const response = await fetch(`${API_BASE_URL}/api/v1/institution/cert-templates`, {
-        method: 'POST',
+      const body = {
+        name: data.eventName || selected?.label || data.certType || 'Certificate Template',
+        description: `${selected?.tag || 'Custom institution certificate template'}`,
+        html_content: buildHtmlContent(data, selected?.label),
+        cert_data: data,
+      };
+      const isUpdate = !!savedTemplateId;
+      const url = isUpdate
+        ? `${API_BASE_URL}/api/v1/institution/certificates/templates/${savedTemplateId}`
+        : `${API_BASE_URL}/api/v1/institution/certificates/templates`;
+      const response = await fetch(url, {
+        method: isUpdate ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders() },
-        body: JSON.stringify({
-          name: selected?.label || data.certType || 'Certificate Template',
-          description: `${selected?.tag || 'Custom institution certificate template'}`,
-          html_content: buildHtmlContent(data, selected?.label),
-        }),
+        body: JSON.stringify(body),
       });
-      const saved = await response.json().catch(() => ({}));
-      onSave?.(data, String(saved?.template_id || selectedId || ''));
-    } catch (e) { console.error(e); }
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ detail: 'Failed to save template' }));
+        alert(err.detail || 'Failed to save template');
+        setSaving(false);
+        return;
+      }
+      const saved = await response.json();
+      const tid = String(saved?.template_id || savedTemplateId || '');
+      if (tid) setSavedTemplateId(tid);
+      await fetchSavedTemplates();
+    } catch (e) { alert('Failed to save template. Check your connection and try again.'); }
     setSaving(false);
+  };
+
+  const openSavedTemplate = (st: SavedTemplate) => {
+    if (st.cert_data) {
+      setData(st.cert_data);
+      setSavedTemplateId(st.template_id);
+      // Find matching preset template from CERT_TEMPLATES
+      const match = CERT_TEMPLATES.find(t => t.label === st.cert_data?.certType);
+      setSelectedId(match?.id || null);
+    }
+  };
+
+  const createNewTemplate = () => {
+    setData(DEFAULT);
+    setSavedTemplateId(null);
+    setSelectedId(null);
   };
 
   const selected = CERT_TEMPLATES.find(t => t.id === selectedId);
   const PreviewComp = selected?.component;
 
   // ── Step 1: Template Gallery ─────────────────────────────────────
-  if (!selectedId) {
+  if (!selectedId && !savedTemplateId) {
+    const savedWithData = savedTemplates.filter(st => st.cert_data);
     return (
       <div className="space-y-8">
         <div>
           <h2 className="text-2xl font-black text-slate-900 tracking-tight">Choose a Certificate Style</h2>
-          <p className="text-slate-500 text-sm mt-1">Pick a template — you'll customize it with your logo, name, and details next.</p>
+          <p className="text-slate-500 text-sm mt-1">Pick a preset template or open a previously saved one to continue editing.</p>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-          {CERT_TEMPLATES.map(t => {
-            const Preview = t.component;
-            return (
-              <button key={t.id} onClick={() => setSelectedId(t.id)}
-                className="group text-left bg-white rounded-[2rem] border-2 border-slate-100 hover:border-[#6C3BFF] shadow-sm hover:shadow-xl transition-all overflow-hidden">
-                {/* Scaled thumbnail */}
-                <div className="relative bg-slate-50 overflow-hidden" style={{ height: 220 }}>
-                  <div className="absolute inset-0 p-4" style={{ transform: 'scale(0.52)', transformOrigin: 'top left', width: '192%', height: '192%', pointerEvents: 'none' }}>
-                    <Preview data={{ ...DEFAULT, certType: t.label, eventName: 'Sample Hackathon', institutionName: 'Your Institution', duration: '1st-2nd Jan 2025', signatories: [{ name: 'Dr. A. Kumar', title: 'Principal', org: 'Institution' }, { name: 'Prof. B. Singh', title: 'Director', org: 'Dept.' }] }} />
+
+        {/* Saved Templates */}
+        {savedWithData.length > 0 && (
+          <div>
+            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">My Saved Templates</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {savedWithData.map(st => {
+                const eventName = st.cert_data?.eventName || st.name;
+                const instName = st.cert_data?.institutionName || '';
+                return (
+                  <button key={st.template_id} onClick={() => openSavedTemplate(st)}
+                    className="group text-left bg-white rounded-[1.5rem] border-2 border-slate-100 hover:border-[#6C3BFF] shadow-sm hover:shadow-lg transition-all overflow-hidden">
+                    <div className="px-5 py-4 flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-xl bg-[#6C3BFF]/10 flex items-center justify-center flex-shrink-0">
+                        <Edit3 size={18} className="text-[#6C3BFF]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-black text-slate-900 text-sm truncate">{eventName || 'Untitled Template'}</p>
+                        <p className="text-[10px] text-slate-400 font-bold truncate">{instName || st.description || 'Saved template'}</p>
+                      </div>
+                      <div className="w-7 h-7 rounded-full border-2 border-slate-100 group-hover:border-[#6C3BFF] group-hover:bg-[#6C3BFF] flex items-center justify-center transition-all flex-shrink-0">
+                        <svg className="w-3.5 h-3.5 text-slate-300 group-hover:text-white transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Preset Templates */}
+        <div>
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Preset Templates</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            {CERT_TEMPLATES.map(t => {
+              const Preview = t.component;
+              return (
+                <button key={t.id} onClick={() => { setSelectedId(t.id); setSavedTemplateId(null); }}
+                  className="group text-left bg-white rounded-[2rem] border-2 border-slate-100 hover:border-[#6C3BFF] shadow-sm hover:shadow-xl transition-all overflow-hidden">
+                  <div className="relative bg-slate-50 overflow-hidden" style={{ height: 220 }}>
+                    <div className="absolute inset-0 p-4" style={{ transform: 'scale(0.52)', transformOrigin: 'top left', width: '192%', height: '192%', pointerEvents: 'none' }}>
+                      <Preview data={{ ...DEFAULT, certType: t.label, eventName: 'Sample Hackathon', institutionName: 'Your Institution', duration: '1st-2nd Jan 2025', signatories: [{ name: 'Dr. A. Kumar', title: 'Principal', org: 'Institution' }, { name: 'Prof. B. Singh', title: 'Director', org: 'Dept.' }] }} />
+                    </div>
+                    <div className="absolute inset-0 bg-[#6C3BFF]/0 group-hover:bg-[#6C3BFF]/10 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                      <span className="bg-[#6C3BFF] text-white text-xs font-black uppercase tracking-widest px-6 py-3 rounded-full shadow-lg">Use This Template</span>
+                    </div>
                   </div>
-                  {/* Hover overlay */}
-                  <div className="absolute inset-0 bg-[#6C3BFF]/0 group-hover:bg-[#6C3BFF]/10 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                    <span className="bg-[#6C3BFF] text-white text-xs font-black uppercase tracking-widest px-6 py-3 rounded-full shadow-lg">Use This Template</span>
+                  <div className="px-5 py-4 flex items-center justify-between">
+                    <div>
+                      <p className="font-black text-slate-900 text-sm">{t.label}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{t.tag}</p>
+                    </div>
+                    <div className="w-8 h-8 rounded-full border-2 border-slate-100 group-hover:border-[#6C3BFF] group-hover:bg-[#6C3BFF] flex items-center justify-center transition-all">
+                      <svg className="w-4 h-4 text-slate-300 group-hover:text-white transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                    </div>
                   </div>
-                </div>
-                {/* Label */}
-                <div className="px-5 py-4 flex items-center justify-between">
-                  <div>
-                    <p className="font-black text-slate-900 text-sm">{t.label}</p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">{t.tag}</p>
-                  </div>
-                  <div className="w-8 h-8 rounded-full border-2 border-slate-100 group-hover:border-[#6C3BFF] group-hover:bg-[#6C3BFF] flex items-center justify-center transition-all">
-                    <svg className="w-4 h-4 text-slate-300 group-hover:text-white transition-all" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                  </div>
-                </div>
-              </button>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
     );
@@ -206,13 +364,13 @@ const CertificateTemplateBuilder: React.FC<{ institutionId: string; onSave?: (da
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-4">
-          <button onClick={() => setSelectedId(null)} className="flex items-center gap-2 text-xs font-black text-slate-400 hover:text-[#6C3BFF] uppercase tracking-widest transition-all">
+          <button onClick={createNewTemplate} className="flex items-center gap-2 text-xs font-black text-slate-400 hover:text-[#6C3BFF] uppercase tracking-widest transition-all">
             <ChevronLeft size={16} /> All Templates
           </button>
           <div className="h-4 w-px bg-slate-200" />
           <div>
-            <h2 className="text-xl font-black text-slate-900">{selected?.label}</h2>
-            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{selected?.tag}</p>
+            <h2 className="text-xl font-black text-slate-900">{selected?.label || 'Custom Template'}</h2>
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{savedTemplateId ? 'Editing saved template' : (selected?.tag || '')}</p>
           </div>
         </div>
         <div className="flex gap-3">
@@ -222,7 +380,7 @@ const CertificateTemplateBuilder: React.FC<{ institutionId: string; onSave?: (da
           </button>
           <button onClick={handleSave} disabled={saving}
             className="flex items-center gap-2 px-5 py-2.5 bg-[#6C3BFF] text-white rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-[#5B2EE0] transition-all disabled:opacity-50">
-            <Save size={14} /> {saving ? 'Saving…' : 'Save Template'}
+            <Save size={14} /> {saving ? 'Saving…' : (savedTemplateId ? 'Update Template' : 'Save Template')}
           </button>
         </div>
       </div>
@@ -237,8 +395,8 @@ const CertificateTemplateBuilder: React.FC<{ institutionId: string; onSave?: (da
             <Field label="Event / Hackathon Name" value={data.eventName} onChange={v => set({ eventName: v })} placeholder="e.g. Tekno'19 Hackathon" />
             <Field label="Body Text" value={data.bodyText} onChange={v => set({ bodyText: v })} placeholder="for participating in..." />
             <div className="grid grid-cols-2 gap-3">
-              <Field label="Duration / Dates" value={data.duration} onChange={v => set({ duration: v })} placeholder="4th–5th Dec 2019" />
-              <Field label="Venue / Location" value={data.venue} onChange={v => set({ venue: v })} placeholder="College Name, City" />
+              <ValidatedDateField label="Duration / Dates" value={data.duration} onChange={v => set({ duration: v })} />
+              <Field label="Venue / Location" value={data.venue} onChange={v => set({ venue: v })} placeholder="e.g. College Name, City" />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Institution Logo" value={data.institutionLogo} onChange={v => set({ institutionLogo: v })} placeholder="https://..." onFileChange={f => uploadFile(f).then(u => set({ institutionLogo: u }))} />

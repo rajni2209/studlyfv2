@@ -214,6 +214,35 @@ class DatabaseManager:
             await self.db.reports.create_index([("event_id", 1), ("type", 1)])
             await self.db.reports.create_index([("institution_id", 1), ("type", 1)])
             
+            # ── Event Certificates (duplicate prevention) ──
+            try:
+                # Remove duplicate event_certificates before creating unique index
+                pipeline = [
+                    {"$group": {
+                        "_id": {"event_id": "$event_id", "user_id": "$user_id", "achievement_key": "$achievement_key"},
+                        "ids": {"$push": "$_id"},
+                        "count": {"$sum": 1}
+                    }},
+                    {"$match": {"count": {"$gt": 1}}}
+                ]
+                async for doc in self.db.event_certificates.aggregate(pipeline):
+                    ids_to_delete = doc["ids"][1:]
+                    logger.info(f"Removing {len(ids_to_delete)} duplicate event certificate(s) for {doc['_id']}")
+                    await self.db.event_certificates.delete_many({"_id": {"$in": ids_to_delete}})
+            except Exception as clean_err:
+                logger.warning(f"Event certificate duplicate cleanup: {clean_err}")
+            try:
+                await self.db.event_certificates.drop_index("event_id_1_user_id_1_achievement_key_1")
+            except:
+                pass
+            await self.db.event_certificates.create_index(
+                [("event_id", 1), ("user_id", 1), ("achievement_key", 1)],
+                unique=True,
+                background=True
+            )
+            await self.db.event_certificates.create_index([("institution_id", 1)])
+            await self.db.event_certificates.create_index([("event_id", 1)])
+            
             # ── Achievements ──
             await self.db.achievements.create_index([("user_id", 1), ("type", 1)])
             await self.db.achievements.create_index([("event_id", 1), ("type", 1)])
