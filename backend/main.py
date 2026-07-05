@@ -15,6 +15,7 @@ import uuid
 import traceback
 from groq import Groq
 import requests
+import httpx
 from services.ai_tools_scraper import fetch_ai_tools
 from jinja2 import Environment, FileSystemLoader, Template
 from fastapi.responses import HTMLResponse
@@ -110,7 +111,8 @@ additional_origins = [origin.strip() for origin in os.getenv("ADDITIONAL_CORS_OR
 
 origins = list(set([
     frontend_url,
-    backend_url
+    backend_url,
+    "https://www.studlyf.in",
 ] + additional_origins))
 
 # Add localhost origins for development
@@ -3452,11 +3454,11 @@ async def setup_interview(req: InterviewSetupRequest, x_groq_api_key: Optional[s
             rounds[0],
             0,
             [],
-            0,
-            None,
-            True,
+            is_round_start=True,
             is_skip=False,
-            api_key=x_groq_api_key
+            api_key=x_groq_api_key,
+            recent_analysis=None,
+            question_count=0,
         )
         first_question = first_q_data["interviewer_text"]
     except:
@@ -3567,11 +3569,11 @@ async def interview_chat(req: InterviewInteractionRequest, x_groq_api_key: Optio
             current_round,
             req.round_index,
             new_history,
-            question_count,
-            recent_analysis,
-            not bool(req.user_response),
+            is_round_start=not bool(req.user_response),
             is_skip=is_skip,
-            api_key=x_groq_api_key
+            api_key=x_groq_api_key,
+            recent_analysis=recent_analysis,
+            question_count=question_count,
         )
 
         interviewer_text = data.get("interviewer_text", "Could you tell me more about that?")
@@ -6557,9 +6559,16 @@ async def signup(user_data: UserSignup, request: Request):
     """
     # Ensure unique email and consistent casing
     email_clean = user_data.email.strip().lower()
+    
+    # Validate email format (any valid email is allowed — no domain restrictions)
+    import re as _re
+    _email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not _re.match(_email_pattern, email_clean):
+        raise HTTPException(status_code=400, detail="Please enter a valid email address.")
+    
     existing_user = await users_col.find_one({"email": email_clean})
     if existing_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="An account already exists with this email.")
     
     
     if len(user_data.password) < 8:

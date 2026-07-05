@@ -204,13 +204,13 @@ const SignupForm: React.FC<SignupFormProps> = ({ onSwitchToLogin, transparent = 
 
                                 <div>
                                     <label className={labelClasses}>
-                                        {isInstitution ? 'Work Email' : 'Student Email'}
+                                        {isInstitution ? 'Email Address' : 'Student Email'}
                                     </label>
                                     <div className="relative">
                                         <Mail className="absolute left-3 top-3.5 text-gray-300" size={18} />
                                         <input
                                             type="email"
-                                            placeholder={isInstitution ? 'admin@institution.com' : 'shiva@gmail.com'}
+                                            placeholder={isInstitution ? 'admin@gmail.com' : 'shiva@gmail.com'}
                                             className={`${inputBase} pl-10`}
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}

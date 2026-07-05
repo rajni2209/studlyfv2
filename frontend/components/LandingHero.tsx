@@ -367,7 +367,7 @@ const LandingHero: React.FC = () => {
                             className="trynow-btn !bg-white !text-[#7c3aed] border-2 border-[#7c3aed] shadow-xl hover:!bg-[#f5f3ff]"
                             onClick={() => navigate('/signup?role=institution')}
                         >
-                            <span className="trynow-label">For Institutions</span>
+                            <span className="trynow-label">Post An Oppurtunity</span>
                             <span className="arrow-icon">
                                 <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                                     <path d="M4 10h12M11 5l5 5-5 5"
