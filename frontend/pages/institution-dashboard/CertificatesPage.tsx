@@ -622,8 +622,24 @@ const CertificatesPage: React.FC<{ institutionId: string; onNavigate?: (tab: str
         </div>
       ) : showTemplateBuilder ? (
         <div className="fixed inset-0 z-50 bg-white p-8 overflow-y-auto">
-          <button onClick={() => { setShowTemplateBuilder(false); fetchTemplates(); }} className="mb-4 flex items-center text-sm text-slate-500 hover:text-indigo-600"><XCircle className="w-4 h-4 mr-2" /> Back to Dashboard</button>
-          <CertificateTemplateBuilder templates={templates} onSelect={selectTemplate} onUpdate={updateTemplate} onSave={saveTemplate} onDelete={deleteTemplate} selectedTemplate={selectedTemplate} />
+        <div className="fixed inset-0 z-50 bg-white p-8 overflow-y-auto">
+          <button 
+            onClick={() => { setShowTemplateBuilder(false); fetchTemplates(); }} 
+            className="mb-4 flex items-center text-sm text-slate-500 hover:text-indigo-600"
+          >
+            <XCircle className="w-4 h-4 mr-2" /> Back to Dashboard
+          </button>
+          
+          <CertificateTemplateBuilder 
+            institutionId={institutionId}
+            templates={templates} 
+            onSelect={selectTemplate} 
+            onUpdate={updateTemplate} 
+            onSave={saveTemplate} 
+            onDelete={deleteTemplate} 
+            selectedTemplate={selectedTemplate} 
+          />
+        </div>
         </div>
       ) : (
         <>
@@ -798,9 +814,27 @@ const CertificatesPage: React.FC<{ institutionId: string; onNavigate?: (tab: str
                             <td className="py-3 px-4"><div className="flex items-center space-x-1">{isPending ? <span className="text-xs text-slate-400">---</span> : <><span className="text-xs font-mono">{c.verification_code || (c.certificate_id || '').slice(-8) || '------'}</span><div className="w-3 h-3 bg-slate-200 rounded-sm" /></>}</div></td>
                             <td className="py-3 px-4">
                               <div className="flex items-center justify-center space-x-2 text-indigo-600">
-                                <Eye className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => setSelectedCertificate(c)} title="Preview Certificate" />
-                                {!isPending && <><Download className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => alert('Download certificate: ' + (c.certificate_id || c._id))} title="Download PDF" />
-                                <Mail className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => { if (c.email) { alert('Send email to: ' + c.email); } else { alert('Email not available for this recipient'); } }} title="Email Certificate" /></>}
+                                <Eye className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => setSelectedCertificate(c)} aria-label="Preview Certificate" />
+                                {!isPending && (
+                                  <>
+                                    <Download 
+                                      className="w-4 h-4 cursor-pointer hover:text-indigo-800" 
+                                      onClick={() => alert('Download certificate: ' + (c.certificate_id || c._id))} 
+                                      aria-label="Download PDF" 
+                                    />
+                                    <Mail 
+                                      className="w-4 h-4 cursor-pointer hover:text-indigo-800" 
+                                      onClick={() => { 
+                                        if (c.email) { 
+                                          alert('Send email to: ' + c.email); 
+                                        } else { 
+                                          alert('Email not available for this recipient'); 
+                                        } 
+                                      }} 
+                                      aria-label="Email Certificate" 
+                                    />
+                                  </>
+                                )}
                                 <MoreVertical className="w-4 h-4 cursor-pointer text-slate-400" />
                               </div>
                             </td>
