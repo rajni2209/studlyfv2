@@ -371,10 +371,8 @@ DEFAULT_TEMPLATES = {
 
     <div class="follow-links" style="text-align:center;">
       <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#94a3b8;margin:0 0 8px 0;">Follow Studlyf</p>
-      <a href="https://www.linkedin.com/company/studlyf/" style="color:#64748b;text-decoration:none;font-size:12px;font-weight:600;">LinkedIn</a> • 
-      <a href="https://www.instagram.com/studlyf.in/" style="color:#64748b;text-decoration:none;font-size:12px;font-weight:600;">Instagram</a> • 
-      <a href="https://x.com" style="color:#64748b;text-decoration:none;font-size:12px;font-weight:600;">X</a> • 
-      <a href="https://youtube.com" style="color:#64748b;text-decoration:none;font-size:12px;font-weight:600;">YouTube</a>
+      <a href="https://www.linkedin.com/company/studlyf/" style="color:#64748b;text-decoration:none;font-size:12px;font-weight:600;">LinkedIn</a> •
+      <a href="https://www.instagram.com/studlyf.in/" style="color:#64748b;text-decoration:none;font-size:12px;font-weight:600;">Instagram</a>
     </div>
   </div>
   <div class="footer">
