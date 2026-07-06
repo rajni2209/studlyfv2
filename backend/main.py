@@ -2,6 +2,7 @@ import os
 import subprocess
 import inspect
 from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'), override=True)
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends, Header, Request, status, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -47,8 +48,6 @@ app.add_middleware(PerformanceMiddleware)
 
 os.makedirs("static", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 # ── Sentry Error Tracking ──
 sentry_dsn = os.getenv("SENTRY_DSN")

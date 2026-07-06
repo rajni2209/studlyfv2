@@ -596,7 +596,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
                             {[
                                 { id: 'name', label: 'Institution Name', icon: Building2, placeholder: 'e.g., Stanford University' },
                                 { id: 'website', label: 'Official Website', icon: Globe, placeholder: 'https://www.university.edu' },
-                                { id: 'email', label: 'Administrative Email', icon: Mail, placeholder: 'admin@university.edu' },
+                                { id: 'email', label: 'Administrative Email', icon: Mail, placeholder: 'admin@university.com' },
                                 { id: 'phone', label: 'Contact Number', icon: Phone, placeholder: '+1 (555) 000-0000' },
                             ].map((field) => (
                                 <div key={field.id} className="space-y-3">
@@ -771,7 +771,7 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
                                             <input 
                                                 value={member.email}
                                                 onChange={(e) => updateMember(idx, 'email', e.target.value)}
-                                                placeholder="jane.smith@univ.edu"
+                                                placeholder="jane.smith@univ.com"
                                                 className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-100 outline-none transition-all text-sm font-bold"
                                             />
                                         </div>

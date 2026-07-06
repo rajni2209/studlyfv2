@@ -91,7 +91,7 @@ const JudgeInviteModal: React.FC<JudgeInviteModalProps> = ({ isOpen, onClose, on
                                         required
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                        placeholder="judge@university.edu"
+                                        placeholder="judge@university.com"
                                         className="w-full pl-12 pr-6 py-4 bg-slate-50 border border-slate-100 rounded-2xl outline-none focus:ring-2 focus:ring-[#6C3BFF]/10 focus:border-[#6C3BFF] transition-all font-medium"
                                     />
                                 </div>
