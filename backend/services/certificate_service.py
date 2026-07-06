@@ -32,11 +32,12 @@ class CertificateService:
         organization_name = cert_data.get('organization_name') or cert_data.get('organization') or cert_data.get('institution_name') or 'Studlyf'
         event_date = cert_data.get('event_date') or cert_data.get('issued_date') or datetime.now().strftime("%B %d, %Y")
         certificate_id = cert_data.get('certificate_id') or cert_data.get('cert_id') or f"STUD-{uuid.uuid4().hex[:8].upper()}"
-        verification_url = cert_data.get('verification_url') or cert_data.get('verify_url') or f"{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/#/verify/{certificate_id}"
+        verification_url = cert_data.get('verification_url') or cert_data.get('verify_url') or f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/#/verify/{certificate_id}"
         achievement_type = cert_data.get('achievement_type') or cert_data.get('category') or 'Participation'
         organizer_signature = cert_data.get('organizer_signature') or organization_name
         studlyf_signature = cert_data.get('studlyf_signature') or 'Studlyf Authorized Signature'
         qr_blob = self._generate_qr_blob(verification_url)
+        sponsor_logos = cert_data.get('sponsor_logos') or []
         html_content = template.render(
             participant_name=participant_name,
             event_name=event_name,
@@ -49,6 +50,7 @@ class CertificateService:
             achievement_type=achievement_type,
             organizer_signature=organizer_signature,
             studlyf_signature=studlyf_signature,
+            sponsor_logos=sponsor_logos,
         )
 
         # 3. Convert to PDF
@@ -65,6 +67,15 @@ class CertificateService:
                 f.write(html_content)
             print(f"[WARNING] WeasyPrint failed to compile PDF: {e}. Saved certificate as HTML fallback at {html_path}")
             return html_path
+
+    def _generate_qr_blob(self, url: str):
+        qr = qrcode.QRCode(version=1, box_size=10, border=5)
+        qr.add_data(url)
+        qr.make(fit=True)
+        img = qr.make_image(fill_color="black", back_color="white")
+        buffered = io.BytesIO()
+        img.save(buffered, format="PNG")
+        return base64.b64encode(buffered.getvalue()).decode()
 
     def _create_default_template(self, path):
         with open(path, 'w', encoding='utf-8') as f:
@@ -106,7 +117,7 @@ class CertificateService:
             <div class="name">{{ participant_name }}</div>
             <div class="body">
                 for successfully participating in<br>
-                <span class="event">“{{ event_name }}”</span><br>
+                <span class="event">"{{ event_name }}"</span><br>
                 organized by<br>
                 <span class="org">{{ organization_name }}</span><br>
                 through the Studlyf platform on {{ event_date }}.
@@ -141,15 +152,6 @@ class CertificateService:
     </div>
 </body>
 </html>
-
-    def _generate_qr_blob(self, url: str):
-        qr = qrcode.QRCode(version=1, box_size=10, border=5)
-        qr.add_data(url)
-        qr.make(fit=True)
-        img = qr.make_image(fill_color="black", back_color="white")
-        buffered = io.BytesIO()
-        img.save(buffered, format="PNG")
-        return base64.b64encode(buffered.getvalue()).decode()
 """)
 
 certificate_service = CertificateService()

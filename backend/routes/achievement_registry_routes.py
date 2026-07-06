@@ -3,12 +3,15 @@ from db import db, certificates_col, events_col, participants_col, submissions_c
 from auth_institution import get_auth_user
 from bson import ObjectId
 from typing import Optional, List
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 import uuid
 from services.institutional_certificate_service import certificate_service, ACHIEVEMENT_TYPES, VALID_ACHIEVEMENTS
 from services.email_service import send_notification_email, get_certificate_issued_template
 from services.email_template_service import get_active_template, render_template
+
+# Ensure ObjectId is globally accessible
+from bson import ObjectId
 
 router = APIRouter(prefix="/api/v1/institution/certificates", tags=["Achievement Registry"])
 
@@ -278,7 +281,7 @@ async def get_eligibility_preview(
         "winner_teams": {"count": len(winners), "recipients": len(winners)},
         "runner_up_teams": {"count": len(runners), "recipients": len(runners)},
         "finalist_teams": {"count": len(finalists), "recipients": len(finalists)},
-        "participation_eligible": {"count": total_participants},
+        "participation_eligible": {"count": non_qualifier_count},
         "non_qualifier_participants": {"count": non_qualifier_count},
     }
 
@@ -369,9 +372,17 @@ async def issue_certificates(
     leaderboard = await _get_leaderboard_for_event(event_id)
     sub_rank_map = {}
     for entry in leaderboard:
-        eid = str(entry.get("_id") or "")
-        if eid:
-            sub_rank_map[eid] = entry.get("rank")
+        rank_val = entry.get("rank")
+        # Map submission_id, user_id, and team_id to the rank for robust lookup
+        sub_id = str(entry.get("submission_id") or "")
+        if sub_id:
+            sub_rank_map[sub_id] = rank_val
+        u_id = str(entry.get("user_id") or "")
+        if u_id:
+            sub_rank_map[u_id] = rank_val
+        t_id = str(entry.get("team_id") or "")
+        if t_id:
+            sub_rank_map[t_id] = rank_val
 
     issued = []
     for sid in recipient_ids:
@@ -381,8 +392,8 @@ async def issue_certificates(
                 return ObjectId(s)
             return s
 
-        # Resolve rank from leaderboard or fallback to query param
-        recipient_rank = rank if rank is not None else sub_rank_map.get(sid, None)
+        # Resolve rank from leaderboard or fallback to 999
+        recipient_rank = rank if rank is not None else sub_rank_map.get(sid, 999)
         sid_query = to_oid(sid)
         
         # Try to resolve from submission_data_col first, then participants_col
@@ -458,7 +469,24 @@ async def issue_certificates(
                 recipient_email = (user_doc or {}).get("email", "")
                 if recipient_email:
                     template = await get_active_template(event_id, institution_id, "certificate_issued")
-                    frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
+                    frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
+                    certificate_type = record.get("achievement_type", "Participation")
+                    # Resolve event and institution logos
+                    event_logo = event.get("event_logo") or event.get("logo_url") or event.get("logo") or event.get("image_url") or ""
+                    institution_logo = event.get("institution_logo") or ""
+                    if not institution_logo:
+                        inst_id = event.get("institution_id")
+                        if inst_id:
+                            from db import institutions_col
+                            inst_doc = await institutions_col.find_one({"institution_id": str(inst_id)})
+                            if not inst_doc:
+                                try:
+                                    inst_doc = await institutions_col.find_one({"_id": ObjectId(str(inst_id))})
+                                except Exception:
+                                    inst_doc = None
+                            if inst_doc:
+                                institution_logo = inst_doc.get("logo_url") or inst_doc.get("logo") or inst_doc.get("image_url") or ""
+
                     context = {
                         "participant_name": participant_name,
                         "event_title": event_title,
@@ -468,10 +496,11 @@ async def issue_certificates(
                         "issued_date": record["issued_date"],
                         "certificate_download_link": f"{frontend_url}/api/v1/institution/download-certificate/{record['certificate_id']}",
                         "verification_url": record["verification_url"],
+                        "certificate_type": certificate_type,
+                        "event_logo": event_logo,
+                        "institution_logo": institution_logo,
                     }
-                    subj, body = render_template(template, context) if template else (
-                        f"Certificate Issued: {event_title}",
-                        get_certificate_issued_template(
+                    body_template_str = await get_certificate_issued_template(
                             participant_name=participant_name,
                             event_title=event_title,
                             organization_name=org_name,
@@ -479,7 +508,13 @@ async def issue_certificates(
                             issued_date=record["issued_date"],
                             certificate_download_link=f"{frontend_url}/api/v1/institution/download-certificate/{record['certificate_id']}",
                             verification_url=record["verification_url"],
-                        ),
+                            certificate_type=certificate_type,
+                            event_logo=event_logo,
+                            institution_logo=institution_logo,
+                        )
+                    subj, body = render_template(template, context) if template else (
+                        f"Certificate Issued: {event_title}",
+                        body_template_str,
                     )
                     await send_notification_email(recipient_email, subj, body)
             except Exception as e:
@@ -522,7 +557,13 @@ async def get_certificate_registry(
         c["_id"] = str(c["_id"])
         c["recipient_name"] = c.get("participant_name") or ""
         c["type"] = c.get("achievement_type") or "Participation"
-        c["issued_on"] = c.get("issued_at") or c.get("issued_date") or ""
+        issued_at = c.get("issued_at")
+        if isinstance(issued_at, datetime):
+            if issued_at.tzinfo is None:
+                issued_at = issued_at.replace(tzinfo=timezone.utc)
+            c["issued_on"] = issued_at.isoformat()
+        else:
+            c["issued_on"] = issued_at or c.get("issued_date") or ""
         c["status"] = c.get("status") or "Issued"
         team_id = c.get("team_id")
         if team_id and not c.get("team_name"):
@@ -533,6 +574,15 @@ async def get_certificate_registry(
             except Exception:
                 pass
         c["team_name"] = c.get("team_name") or ""
+        if not c.get("email"):
+            try:
+                uid = c.get("user_id") or c.get("recipient_id")
+                if uid:
+                    user_doc = await users_col.find_one({"user_id": uid})
+                    if user_doc:
+                        c["email"] = user_doc.get("email") or ""
+            except Exception:
+                pass
         result.append(c)
     return result
 
@@ -565,9 +615,10 @@ async def revoke_certificate(
 # Template Builder Endpoints
 @router.get("/templates")
 async def list_cert_templates_for_institution(user: dict = Depends(get_auth_user)):
-    """Institution-scoped: list all user-saved certificate templates only."""
+    """Institution-scoped: list all user-saved certificate templates only, newest first."""
     results = []
-    async for doc in cert_templates_col.find({}):
+    cursor = cert_templates_col.find({}).sort([("updated_at", -1), ("created_at", -1)])
+    async for doc in cursor:
         doc["_id"] = str(doc["_id"])
         results.append(doc)
     return results
@@ -670,3 +721,43 @@ async def delete_cert_template_for_institution(
     
     await cert_templates_col.delete_one({"template_id": template_id})
     return {"status": "success", "message": "Template deleted successfully"}
+
+
+@router.post("/reset-email-template")
+async def reset_certificate_email_template(
+    event_id: str = Body(...),
+    user: dict = Depends(get_auth_user),
+):
+    """Reset the certificate_issued email template for an event back to code default."""
+    from services.email_template_service import DEFAULT_TEMPLATES
+    from db import email_templates_col
+
+    role = str(user.get("role") or "").lower()
+    if role not in ("institution", "admin", "super_admin"):
+        raise HTTPException(status_code=403, detail="Institution access required")
+
+    event = await events_col.find_one({"_id": ObjectId(event_id)})
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    institution_id = str(event.get("institution_id", ""))
+    if role == "institution" and str(user.get("institution_id", "")) != institution_id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    if "certificate_issued" not in DEFAULT_TEMPLATES:
+        raise HTTPException(status_code=500, detail="Default template not found in code")
+
+    default = dict(DEFAULT_TEMPLATES["certificate_issued"])
+    default["event_id"] = event_id
+    default["institution_id"] = institution_id
+    default["is_active"] = True
+    default["is_default"] = False
+    default["updated_at"] = datetime.now(timezone.utc)
+
+    await email_templates_col.update_one(
+        {"event_id": event_id, "type": "certificate_issued"},
+        {"$set": default},
+        upsert=True,
+    )
+
+    return {"status": "success", "message": "Certificate email template reset to default for this event"}

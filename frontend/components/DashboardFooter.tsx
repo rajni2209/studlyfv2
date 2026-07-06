@@ -39,7 +39,7 @@ const DashboardFooter: React.FC<DashboardFooterProps> = ({ variant = 'student' }
         col5: [
             { name: 'Documentation', to: '/docs/institution' },
             { name: 'API Access', to: '/institution-dashboard?tab=api' },
-            { name: 'Support', to: 'mailto:support@studlyf.com' },
+            { name: 'Support', to: `mailto:${import.meta.env.VITE_SUPPORT_EMAIL || 'support@studlyf.com'}` },
             { name: 'Help Center', to: '/help' },
         ],
     };

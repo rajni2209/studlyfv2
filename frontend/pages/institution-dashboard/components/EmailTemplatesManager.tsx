@@ -18,16 +18,36 @@ interface EmailTemplate {
   institution_id?: string;
 }
 
-const PLACEHOLDER_BUTTONS = [
-  { key: 'team_name', label: 'Team Name' },
-  { key: 'event_name', label: 'Event Name' },
-  { key: 'stage_name', label: 'Stage Name' },
-  { key: 'participant_name', label: 'Participant Name' },
-  { key: 'custom_message', label: 'Custom Message' },
-  { key: 'deadline', label: 'Deadline' },
-  { key: 'new_deadline', label: 'New Deadline' },
-  { key: 'score', label: 'Score' },
-];
+const PLACEHOLDER_BY_TYPE: Record<string, { key: string; label: string }[]> = {
+  default: [
+    { key: 'team_name', label: 'Team Name' },
+    { key: 'event_name', label: 'Event Name' },
+    { key: 'stage_name', label: 'Stage Name' },
+    { key: 'participant_name', label: 'Participant Name' },
+    { key: 'custom_message', label: 'Custom Message' },
+    { key: 'deadline', label: 'Deadline' },
+    { key: 'new_deadline', label: 'New Deadline' },
+    { key: 'score', label: 'Score' },
+    { key: 'frontend_url', label: 'Platform URL' },
+  ],
+  certificate_issued: [
+    { key: 'participant_name', label: 'Participant Name' },
+    { key: 'event_title', label: 'Event Title' },
+    { key: 'organization_name', label: 'Organization' },
+    { key: 'certificate_id', label: 'Certificate ID' },
+    { key: 'issued_date', label: 'Issued Date' },
+    { key: 'certificate_download_link', label: 'Download Link' },
+    { key: 'verification_url', label: 'Verification URL' },
+    { key: 'certificate_type', label: 'Certificate Type' },
+    { key: 'institution_linkedin', label: 'LinkedIn URL' },
+    { key: 'institution_instagram', label: 'Instagram URL' },
+    { key: 'institution_twitter', label: 'X URL' },
+    { key: 'institution_youtube', label: 'YouTube URL' },
+    { key: 'frontend_url', label: 'Platform URL' },
+  ],
+};
+
+const getPlaceholders = (type: string) => PLACEHOLDER_BY_TYPE[type] || PLACEHOLDER_BY_TYPE.default;
 
 const TEMPLATE_TYPES: { type: string; label: string; desc: string }[] = [
   { type: 'stage_advancement', label: 'Stage Advancement', desc: 'Sent when participants advance to a new stage' },
@@ -35,6 +55,7 @@ const TEMPLATE_TYPES: { type: string; label: string; desc: string }[] = [
   { type: 'deadline_reminder', label: 'Deadline Reminder', desc: 'Automated reminders before stage deadlines' },
   { type: 'deadline_extension', label: 'Deadline Extension', desc: 'Notification when deadlines are extended' },
   { type: 'registration_confirmation', label: 'Registration Confirmation', desc: 'Sent when a participant registers' },
+  { type: 'certificate_issued', label: 'Certificate Issued', desc: 'Sent when a certificate is awarded to a participant' },
 ];
 
 const EmailTemplatesManager: React.FC<{ eventId: string; institutionId: string }> = ({ eventId, institutionId }) => {
@@ -83,7 +104,7 @@ const EmailTemplatesManager: React.FC<{ eventId: string; institutionId: string }
       type: selectedType,
       subject: '',
       body_html: '',
-      placeholders: PLACEHOLDER_BUTTONS.map(p => p.key),
+      placeholders: getPlaceholders(selectedType).map(p => p.key),
       is_default: false,
       is_active: false,
     };
@@ -123,7 +144,7 @@ const EmailTemplatesManager: React.FC<{ eventId: string; institutionId: string }
         type: selectedType,
         subject,
         body_html: bodyHtml,
-        placeholders: PLACEHOLDER_BUTTONS.map(p => p.key),
+      placeholders: getPlaceholders(selectedType).map(p => p.key),
         is_active: editing?.is_active ?? false,
       };
       const res = await fetch(`${baseUrl}/email-templates`, {
@@ -207,6 +228,7 @@ const EmailTemplatesManager: React.FC<{ eventId: string; institutionId: string }
       const sample: Record<string, string> = {
         team_name: 'Team Alpha',
         event_name: `National Hackathon ${yr}`,
+        event_title: `National Hackathon ${yr}`,
         stage_name: 'Final Round',
         participant_name: 'John Doe',
         custom_message: 'Your team has been selected for the next phase!',
@@ -214,6 +236,16 @@ const EmailTemplatesManager: React.FC<{ eventId: string; institutionId: string }
         new_deadline: `${deadline2} 23:59 UTC`,
         score: '94',
         frontend_url: 'https://app.studlyf.com',
+        organization_name: 'Example Institution',
+        certificate_id: 'CERT-2026-ABCD1234',
+        issued_date: now.toISOString().slice(0, 10),
+        certificate_download_link: 'https://app.studlyf.com/api/v1/institution/download-certificate/CERT-2026-ABCD1234',
+        verification_url: 'https://app.studlyf.com/#/verify/CERT-2026-ABCD1234',
+        certificate_type: 'Participation',
+        institution_linkedin: 'https://linkedin.com/company/example',
+        institution_instagram: 'https://instagram.com/example',
+        institution_twitter: 'https://x.com/example',
+        institution_youtube: 'https://youtube.com/@example',
       };
       return sample[key] || `{${key}}`;
     });
@@ -452,7 +484,7 @@ const EmailTemplatesManager: React.FC<{ eventId: string; institutionId: string }
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Insert Placeholder</label>
             <div className="flex flex-wrap gap-2">
-              {PLACEHOLDER_BUTTONS.map(pb => (
+              {getPlaceholders(selectedType).map(pb => (
                 <button
                   key={pb.key}
                   onClick={() => insertPlaceholder(pb.key)}
@@ -485,7 +517,28 @@ const EmailTemplatesManager: React.FC<{ eventId: string; institutionId: string }
                 <div className="px-4 py-2 bg-slate-50 border-b border-slate-100">
                   <p className="text-xs font-bold text-slate-500">
                     Subject: <span className="text-slate-900">{subject.replace(/\{(\w+)\}/g, (_, k) => {
-                      const s: Record<string, string> = { team_name: 'Team A', event_name: 'Sample Event', stage_name: 'Round 1', participant_name: 'Jane Doe', custom_message: '...', deadline: '2026-06-15', new_deadline: '2026-06-20', score: '85' };
+                      const s: Record<string, string> = { 
+                        team_name: 'Team A', 
+                        event_name: 'Sample Event', 
+                        event_title: 'Sample Event', 
+                        stage_name: 'Round 1', 
+                        participant_name: 'Jane Doe', 
+                        custom_message: '...', 
+                        deadline: '2026-06-15', 
+                        new_deadline: '2026-06-20', 
+                        score: '85',
+                        frontend_url: 'https://app.studlyf.com',
+                        organization_name: 'Example Institution',
+                        certificate_id: 'CERT-2026-ABCD1234',
+                        issued_date: '2026-07-06',
+                        certificate_download_link: 'https://app.studlyf.com/api/v1/institution/download-certificate/CERT-2026-ABCD1234',
+                        verification_url: 'https://app.studlyf.com/#/verify/CERT-2026-ABCD1234',
+                        certificate_type: 'Participation',
+                        institution_linkedin: 'https://linkedin.com/company/example',
+                        institution_instagram: 'https://instagram.com/example',
+                        institution_twitter: 'https://x.com/example',
+                        institution_youtube: 'https://youtube.com/@example',
+                      };
                       return s[k] || `{${k}}`;
                     })}</span>
                   </p>

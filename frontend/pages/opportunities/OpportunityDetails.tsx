@@ -2759,7 +2759,7 @@ const OpportunityDetails: React.FC = () => {
                             </p>
                             <button
                                 type="button"
-                                onClick={() => window.location.href = 'mailto:support@studlyf.com?subject=Report Issue&body=' + encodeURIComponent(`Issue with: ${opportunity.title}\n${window.location.href}`)}
+                                onClick={() => window.location.href = `mailto:${import.meta.env.VITE_SUPPORT_EMAIL || 'support@studlyf.com'}?subject=Report Issue&body=` + encodeURIComponent(`Issue with: ${opportunity.title}\n${window.location.href}`)}
                                 className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors flex items-center gap-1.5 cursor-pointer"
                             >
                                 <AlertCircle size={12} /> Report an Issue

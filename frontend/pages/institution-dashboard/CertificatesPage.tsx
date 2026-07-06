@@ -622,7 +622,7 @@ const CertificatesPage: React.FC<{ institutionId: string; onNavigate?: (tab: str
         </div>
       ) : showTemplateBuilder ? (
         <div className="fixed inset-0 z-50 bg-white p-8 overflow-y-auto">
-          <button onClick={() => setShowTemplateBuilder(false)} className="mb-4 flex items-center text-sm text-slate-500 hover:text-indigo-600"><XCircle className="w-4 h-4 mr-2" /> Back to Dashboard</button>
+          <button onClick={() => { setShowTemplateBuilder(false); fetchTemplates(); }} className="mb-4 flex items-center text-sm text-slate-500 hover:text-indigo-600"><XCircle className="w-4 h-4 mr-2" /> Back to Dashboard</button>
           <CertificateTemplateBuilder templates={templates} onSelect={selectTemplate} onUpdate={updateTemplate} onSave={saveTemplate} onDelete={deleteTemplate} selectedTemplate={selectedTemplate} />
         </div>
       ) : (
@@ -800,7 +800,7 @@ const CertificatesPage: React.FC<{ institutionId: string; onNavigate?: (tab: str
                               <div className="flex items-center justify-center space-x-2 text-indigo-600">
                                 <Eye className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => setSelectedCertificate(c)} title="Preview Certificate" />
                                 {!isPending && <><Download className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => alert('Download certificate: ' + (c.certificate_id || c._id))} title="Download PDF" />
-                                <Mail className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => alert('Send email to: ' + c.email)} title="Email Certificate" /></>}
+                                <Mail className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => { if (c.email) { alert('Send email to: ' + c.email); } else { alert('Email not available for this recipient'); } }} title="Email Certificate" /></>}
                                 <MoreVertical className="w-4 h-4 cursor-pointer text-slate-400" />
                               </div>
                             </td>
@@ -1258,7 +1258,16 @@ const CertificateRulesManager: React.FC<{ institutionId: string; onClose: () => 
       };
       const url = editingRule ? `${API_BASE_URL}/api/v1/certificates/rules/${ruleId}` : `${API_BASE_URL}/api/v1/certificates/rules/`;
       const res = await fetch(url, { method: editingRule ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
-      if (res.ok) { setShowForm(false); setEditingRule(null); fetchRules(); }
+      if (res.ok) {
+        setShowForm(false);
+        setEditingRule(null);
+        if (editingRule) {
+          setRules(prev => prev.map(r => r.rule_id === ruleId ? { ...r, ...payload } : r));
+        } else {
+          const saved = await res.json().catch(() => payload);
+          setRules(prev => [...prev, saved]);
+        }
+      }
       else { const err = await res.json(); alert(err.detail || 'Failed to save rule'); }
     } catch { alert('Failed to save rule'); } finally { setSaving(false); }
   };

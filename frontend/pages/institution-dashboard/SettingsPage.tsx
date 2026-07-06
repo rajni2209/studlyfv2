@@ -1347,7 +1347,16 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
                 };
                 const url = editingRule ? `${API_BASE_URL}/api/v1/certificates/rules/${ruleId}` : `${API_BASE_URL}/api/v1/certificates/rules/`;
                 const res = await fetch(url, { method: editingRule ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
-                if (res.ok) { setShowForm(false); setEditingRule(null); fetchRules(); }
+                if (res.ok) {
+                    setShowForm(false);
+                    setEditingRule(null);
+                    if (editingRule) {
+                        setRules(prev => prev.map(r => r.rule_id === ruleId ? { ...r, ...payload } : r));
+                    } else {
+                        const saved = await res.json().catch(() => payload);
+                        setRules(prev => [...prev, saved]);
+                    }
+                }
                 else { const err = await res.json(); alert(err.detail || 'Failed to save rule'); }
             } catch { alert('Failed to save rule'); } finally { setSaving(false); }
         };

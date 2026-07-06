@@ -1,3 +1,4 @@
+import logging
 import os
 import io
 import base64
@@ -13,7 +14,9 @@ except Exception:
 from datetime import datetime, timezone
 from bson import ObjectId
 from db import event_certificates_col, cert_templates_col, certificate_jobs_col
-from services.email_template_service import get_active_template, render_template
+from services.email_template_service import get_active_template, render_template, ensure_absolute_url
+
+logger = logging.getLogger("institutional_cert_service")
 
 
 ACHIEVEMENT_TYPES = {
@@ -31,7 +34,7 @@ VALID_ACHIEVEMENTS = list(ACHIEVEMENT_TYPES.keys())
 
 
 def generate_certificate_id(event_code: str = "HACK") -> str:
-    year = datetime.utcnow().year
+    year = datetime.now(timezone.utc).year
     seq = uuid.uuid4().int % 100000
     code = event_code[:6].upper() if event_code else "HACK"
     return f"STUD-{code}-{year}-{seq:05d}"
@@ -45,6 +48,13 @@ def resolve_rank_achievement(rank: int | None) -> str:
     if rank == 3:
         return "second_runner_up"
     return "participation"
+
+
+def _replace_placeholders(template: str, **kwargs) -> str:
+    """Safe placeholder replacement that avoids Python str.format() issues with CSS curly braces."""
+    for key, value in kwargs.items():
+        template = template.replace("{" + key + "}", str(value))
+    return template
 
 
 def _event_has_final_terminal_stage(event: dict) -> bool:
@@ -94,7 +104,7 @@ def _build_certificate_record(
         "achievement_key": achievement_type,
         "rank": rank,
         "team_id": team_id,
-        "issued_at": datetime.utcnow(),
+        "issued_at": datetime.now(timezone.utc),
         "issued_date": issued_date,
         "verification_code": verification_code,
         "verification_url": verification_url,
@@ -228,26 +238,99 @@ class InstitutionalCertificateService:
     ) -> dict:
         cert_id = generate_certificate_id(event_code)
         v_code = hashlib.sha256(f"{cert_id}:{event_id}:{user_id}".encode()).hexdigest()[:12].upper()
-        frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         v_url = f"{frontend_url}/#/verify/{cert_id}"
         qr_blob = self._generate_qr_blob(v_url)
-        issue_date = datetime.utcnow().strftime("%B %d, %Y")
+        issue_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
         achievement_label = ACHIEVEMENT_TYPES.get(achievement_type, "Participation")
 
         html = None
+
+        sponsor_logos_data = []
+        try:
+            from db import events_col
+            from bson import ObjectId
+            event_doc = await events_col.find_one({"_id": ObjectId(str(event_id))})
+            if event_doc:
+                sponsors = event_doc.get("sponsors") or []
+                for s in sponsors:
+                    logo = s.get("logo") or s.get("logo_url") or ""
+                    if logo and isinstance(logo, dict) and "data" in logo:
+                        # Convert BinData to Base64
+                        b64_data = base64.b64encode(logo["data"]).decode('utf-8')
+                        sponsor_logos_data.append(ensure_absolute_url(f"data:{logo.get('contentType')};base64,{b64_data}"))
+                    elif isinstance(logo, str) and logo:  # Fallback for URL/base64 format
+                        sponsor_logos_data.append(ensure_absolute_url(logo))
+        except Exception as e:
+            print(f"[ERROR] Failed to fetch/process sponsor logos: {e}")
+
+        sponsor_html = ""
+        if sponsor_logos_data:
+            logo_tags = [f'<td><img src="{logo}" alt="Sponsor" style="height:40px;margin:5px;"></td>' for logo in sponsor_logos_data]
+            sponsor_html = '<div class="sponsors"><div class="slabel">Sponsored By</div><table><tr>' + "".join(logo_tags) + "</tr></table></div>"
+
+        # ── Resolve logos from the event and institution profile ──────────────
+        event_logo = ""
+        institution_logo = ""
+        try:
+            if event_doc:
+                event_logo = event_doc.get("logo_url") or event_doc.get("logo") or event_doc.get("image_url") or ""
+                institution_logo = event_doc.get("institution_logo") or ""
+                # If not on the event, look up the institution profile for the logo
+                if not institution_logo:
+                    inst_id = event_doc.get("institution_id") or institution_id
+                    if inst_id:
+                        try:
+                            from db import institutions_col
+                            inst_doc = await institutions_col.find_one({"institution_id": str(inst_id)})
+                            if not inst_doc:
+                                inst_doc = await institutions_col.find_one({"_id": ObjectId(str(inst_id))})
+                            if inst_doc:
+                                institution_logo = (
+                                    inst_doc.get("logo_url") or
+                                    inst_doc.get("logo") or
+                                    inst_doc.get("image_url") or ""
+                                )
+                        except Exception as e_inst:
+                            logger.warning(f"[CERT] Failed to fetch institution logo: {e_inst}")
+        except Exception:
+            pass
+
+        event_logo = ensure_absolute_url(event_logo)
+        institution_logo = ensure_absolute_url(institution_logo)
+
+        # ── Resolve signatories ───────────────────────────────────────────────
+        signatory_name = ""
+        signatory_title = ""
+        signatory_organization = ""
+        try:
+            if event_doc:
+                signatory_name = event_doc.get("signatory_name") or ""
+                signatory_title = event_doc.get("signatory_title") or ""
+                signatory_organization = event_doc.get("signatory_organization") or ""
+        except Exception:
+            pass
+
         if template_id:
             tmpl_doc = await cert_templates_col.find_one({"template_id": template_id})
             if tmpl_doc and tmpl_doc.get("html_content"):
+                placeholder_kwargs = dict(
+                    student_name=participant_name,
+                    course_title=event_title,
+                    issue_date=issue_date,
+                    certificate_id=cert_id,
+                    achievement_label=achievement_label,
+                    rank=rank or '',
+                    cert_type=achievement_type,
+                    signatory_name=signatory_name,
+                    signatory_title=signatory_title,
+                    signatory_organization=signatory_organization if signatory_name else "",
+                    sponsor_logos=sponsor_html,
+                    institution_logo=institution_logo,
+                    event_logo=event_logo,
+                )
                 try:
-                    html = tmpl_doc["html_content"].format(
-                        student_name=participant_name,
-                        course_title=event_title,
-                        issue_date=issue_date,
-                        certificate_id=cert_id,
-                        achievement_label=achievement_label,
-                        rank=rank or '',
-                        cert_type=achievement_type,
-                    )
+                    html = _replace_placeholders(tmpl_doc["html_content"], **placeholder_kwargs)
                 except Exception as e:
                     print(f"[TEMPLATE ERROR] Rendering failed for template {template_id}: {e}")
                     html = None
@@ -270,8 +353,14 @@ class InstitutionalCertificateService:
                 verification_url=v_url,
                 cert_short_id=cert_id[-10:],
                 organizer_signature=organization_name,
-                studlyf_signature="Studlyf Authorized Signature",
+                sponsor_logos=sponsor_logos_data,
+                event_logo=event_logo,
+                institution_logo=institution_logo,
+                signatory_name=signatory_name,
+                signatory_title=signatory_title,
+                signatory_organization=signatory_organization if signatory_name else "",
             )
+            logger.debug(f"[DEBUG CERT] Rendering HTML with Institution Logo: {institution_logo}, Event Logo: {event_logo}")
 
         pdf_path = None
         if HAS_WEASYPRINT:
@@ -326,10 +415,10 @@ class InstitutionalCertificateService:
 
         event_title = event.get("title", "Untitled Event")
         org_name = event.get("organisation") or event.get("organization") or "Unknown"
-        event_date = event.get("eventDate") or event.get("start_date") or datetime.utcnow().strftime("%B %d, %Y")
+        event_date = event.get("eventDate") or event.get("start_date") or datetime.now(timezone.utc).strftime("%B %d, %Y")
         institution_id = str(event.get("institution_id", ""))
         event_code = (event.get("eventCode") or event.get("event_type") or "HACK")[:6].upper()
-        frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
+        frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
         template_id = template_id or event.get("template_id")
 
         template = await get_active_template(event_id, institution_id, "certificate_issued")
@@ -408,6 +497,7 @@ class InstitutionalCertificateService:
                     continue
 
                 try:
+                    certificate_type = record.get("achievement_type", "Participation")
                     context = {
                         "participant_name": recipient["name"],
                         "event_title": event_title,
@@ -417,10 +507,11 @@ class InstitutionalCertificateService:
                         "issued_date": record["issued_date"],
                         "certificate_download_link": f"{frontend_url}/api/v1/institution/download-certificate/{record['certificate_id']}",
                         "verification_url": record["verification_url"],
+                        "certificate_type": certificate_type,
+                        "institution_logo": event.get("institution_logo") or "",
+                        "event_logo": event.get("event_logo") or "",
                     }
-                    subj, body = render_template(template, context) if template else (
-                        f"Certificate Issued: {event_title}",
-                        get_certificate_issued_template(
+                    body_template_str = await get_certificate_issued_template(
                             participant_name=recipient["name"],
                             event_title=event_title,
                             organization_name=org_name,
@@ -428,7 +519,11 @@ class InstitutionalCertificateService:
                             issued_date=record["issued_date"],
                             certificate_download_link=f"{frontend_url}/api/v1/institution/download-certificate/{record['certificate_id']}",
                             verification_url=record["verification_url"],
-                        ),
+                            certificate_type=certificate_type,
+                        )
+                    subj, body = render_template(template, context) if template else (
+                        f"Certificate Issued: {event_title}",
+                        body_template_str,
                     )
                     await send_notification_email(recipient["email"], subj, body)
 
@@ -525,9 +620,49 @@ async def process_certificate_jobs():
 
             event_title = event.get("title", "Untitled Event")
             org_name = event.get("organisation") or event.get("organization") or "Unknown"
-            event_date = event.get("eventDate") or event.get("start_date") or datetime.utcnow().strftime("%B %d, %Y")
+            event_date = event.get("eventDate") or event.get("start_date") or datetime.now(timezone.utc).strftime("%B %d, %Y")
             institution_id = str(event.get("institution_id", ""))
-            frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
+            
+            # Resolve event and institution logos
+            event_logo = event.get("event_logo") or event.get("logo_url") or event.get("logo") or event.get("image_url") or ""
+            institution_logo = event.get("institution_logo") or ""
+            if not institution_logo:
+                inst_id = event.get("institution_id") or institution_id
+                if inst_id:
+                    try:
+                        from db import institutions_col
+                        inst_doc = await institutions_col.find_one({"institution_id": str(inst_id)})
+                        if not inst_doc:
+                            inst_doc = await institutions_col.find_one({"_id": ObjectId(str(inst_id))})
+                        if inst_doc:
+                            institution_logo = (
+                                inst_doc.get("logo_url") or
+                                inst_doc.get("logo") or
+                                inst_doc.get("image_url") or ""
+                            )
+                    except Exception as e_inst:
+                        logger.warning(f"[CERT BG] Failed to fetch institution logo: {e_inst}")
+
+            event_logo = ensure_absolute_url(event_logo)
+            institution_logo = ensure_absolute_url(institution_logo)
+
+            # Fetch sponsor logos
+            sponsor_logos_data = []
+            sponsors = event.get("sponsors") or []
+            for s in sponsors:
+                logo = s.get("logo")
+                if logo and isinstance(logo, dict) and "data" in logo:
+                    b64_data = base64.b64encode(logo["data"]).decode('utf-8')
+                    sponsor_logos_data.append(ensure_absolute_url(f"data:{logo.get('contentType')};base64,{b64_data}"))
+                elif isinstance(logo, str):
+                    sponsor_logos_data.append(ensure_absolute_url(logo))
+            
+            sponsor_html = ""
+            if sponsor_logos_data:
+                logo_tags = [f'<td><img src="{logo}" alt="Sponsor" style="height:40px;margin:5px;"></td>' for logo in sponsor_logos_data]
+                sponsor_html = '<div class="sponsors"><div class="slabel">Sponsored By</div><table><tr>' + "".join(logo_tags) + "</tr></table></div>"
+
+            frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
             template = await get_active_template(event_id, institution_id, "certificate_issued")
 
             cursor = participants_col.find({"event_id": event_id})
@@ -573,7 +708,7 @@ async def process_certificate_jobs():
                 cert_id = generate_certificate_id(event_code[:6].upper())
                 v_code = hashlib.sha256(f"{cert_id}:{event_id}:{pid}".encode()).hexdigest()[:12].upper()
                 v_url = f"{frontend_url}/#/verify/{cert_id}"
-                issue_date = datetime.utcnow().strftime("%B %d, %Y")
+                issue_date = datetime.now(timezone.utc).strftime("%B %d, %Y")
                 record = _build_certificate_record(
                     cert_id=cert_id,
                     event_id=event_id,
@@ -595,6 +730,7 @@ async def process_certificate_jobs():
                 try:
                     pemail = (puser or {}).get("email", "").strip()
                     if pemail:
+                        certificate_type = ACHIEVEMENT_TYPES.get(achievement_type, "Participation")
                         context = {
                             "participant_name": pname,
                             "event_title": event_title,
@@ -604,13 +740,16 @@ async def process_certificate_jobs():
                             "issued_date": issue_date,
                             "certificate_download_link": f"{frontend_url}/api/v1/institution/download-certificate/{cert_id}",
                             "verification_url": v_url,
+                            "certificate_type": certificate_type,
+                            "institution_logo": institution_logo,
+                            "event_logo": event_logo,
                         }
                         if template:
                             subj, body = render_template(template, context)
                         else:
                             from services.email_service import get_certificate_issued_template
                             subj = f"Certificate Issued: {event_title}"
-                            body = get_certificate_issued_template(
+                            body = await get_certificate_issued_template(
                                 participant_name=pname,
                                 event_title=event_title,
                                 organization_name=org_name,
@@ -618,6 +757,9 @@ async def process_certificate_jobs():
                                 issued_date=issue_date,
                                 certificate_download_link=f"{frontend_url}/api/v1/institution/download-certificate/{cert_id}",
                                 verification_url=v_url,
+                                certificate_type=certificate_type,
+                                event_logo=event_logo,
+                                institution_logo=institution_logo,
                             )
                         pending_email_jobs.append((pemail, subj, body))
                 except Exception as e:

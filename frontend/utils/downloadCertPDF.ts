@@ -22,9 +22,12 @@ export async function downloadCertPDF(
         const html = await res.text();
 
         // 2. Render the HTML into a hidden off-screen iframe so styles apply
+        // Use exact A4 Landscape pixel dimensions at 96 DPI: 297mm × 210mm
+        const A4_LANDSCAPE_W = 1123;
+        const A4_LANDSCAPE_H = 794;
         const iframe = document.createElement('iframe');
         iframe.style.cssText =
-            'position:fixed;top:-10000px;left:-10000px;width:1050px;height:740px;border:none;';
+            `position:fixed;top:-10000px;left:-10000px;width:${A4_LANDSCAPE_W}px;height:${A4_LANDSCAPE_H}px;border:none;`;
         document.body.appendChild(iframe);
 
         iframe.contentDocument!.open();
@@ -41,10 +44,10 @@ export async function downloadCertPDF(
                 scale: 2,           // 2× for crisp output
                 useCORS: true,
                 backgroundColor: '#ffffff',
-                width: 1050,
-                height: 740,
-                windowWidth: 1050,
-                windowHeight: 740,
+                width: A4_LANDSCAPE_W,
+                height: A4_LANDSCAPE_H,
+                windowWidth: A4_LANDSCAPE_W,
+                windowHeight: A4_LANDSCAPE_H,
             }
         );
 

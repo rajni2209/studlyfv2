@@ -2852,6 +2852,7 @@ async def confirm_track_enrollment(user_id: str, data: dict = Body(...)):
         payment_date = datetime.now().strftime("%B %d, %Y")
         user_name = user_doc.get('full_name') or user_doc.get('name', 'Learner')
         
+        support_email = os.getenv("VITE_SUPPORT_EMAIL") or os.getenv("SUPPORT_EMAIL") or "support@studlyf.com"
         email_body = f"""
         <html>
         <body style="font-family: 'Poppins', sans-serif; background-color: #F9FAFB; margin: 0; padding: 0; color: #1F2937;">
@@ -2935,7 +2936,7 @@ async def confirm_track_enrollment(user_id: str, data: dict = Body(...)):
 
                 <!-- Footer -->
                 <div style="background-color: #F9FAFB; padding: 30px; border-top: 1px solid #E5E7EB; text-align: center; font-size: 11px; color: #9CA3AF; font-weight: 500;">
-                    <p style="margin: 0 0 10px 0;">Have queries? Reach our team at <a href="mailto:{os.getenv('SUPPORT_EMAIL', 'support@studlyf.com')}" style="color: #7C3AED; text-decoration: none; font-weight: bold;">{os.getenv('SUPPORT_EMAIL', 'support@studlyf.com')}</a></p>
+                    <p style="margin: 0 0 10px 0;">Have queries? Reach our team at <a href="mailto:{support_email}" style="color: #7C3AED; text-decoration: none; font-weight: bold;">{support_email}</a></p>
                     <p style="margin: 0;">Studlyf Engineering Systems &copy; {datetime.utcnow().year}. All Rights Reserved.</p>
                 </div>
             </div>
@@ -5332,20 +5333,26 @@ DUMMY_CERTIFICATE_HTML = """
 <meta charset="UTF-8"/>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;600&display=swap');
+  @page { size: 297mm 210mm; margin: 0; }
   * {{ margin:0; padding:0; box-sizing:border-box; }}
-  body {{ width:1040px; height:720px; display:flex; align-items:center; justify-content:center;
+  body {{ width: 297mm; height: 210mm; display:flex; align-items:center; justify-content:center;
           font-family:'Inter',sans-serif; background:#fff; }}
-  .cert {{ width:1000px; height:680px; border:6px solid #7C3AED; border-radius:24px;
-           padding:56px 72px; display:flex; flex-direction:column; justify-content:space-between;
+  .cert {{ width: 280mm; height: 195mm; border:6px solid #7C3AED; border-radius:24px;
+           padding:48px 64px; display:flex; flex-direction:column; justify-content:space-between;
            position:relative; overflow:hidden; }}
   .cert::before {{ content:''; position:absolute; top:0; left:0; right:0; height:8px;
                    background:linear-gradient(90deg,#7C3AED,#A78BFA); }}
   .logo {{ font-size:12px; font-weight:700; letter-spacing:.4em; text-transform:uppercase; color:#7C3AED; }}
-  .center {{ text-align:center; }}
+  .center {{ text-align:center; flex:1; display:flex; flex-direction:column; justify-content:center; }}
   .awarded {{ font-size:11px; letter-spacing:.3em; text-transform:uppercase; color:#9CA3AF; margin-bottom:20px; }}
-  .name {{ font-family:'Playfair Display', serif; font-size:52px; color:#111827; line-height:1; }}
+  .name {{ font-family:'Playfair Display', serif; font-size:48px; color:#111827; line-height:1.2; }}
   .desc {{ font-size:14px; color:#6B7280; margin-top:18px; max-width:600px; margin-inline:auto; line-height:1.7; }}
-  .course {{ font-size:22px; font-weight:700; color:#7C3AED; margin-top:12px; }}
+  .course {{ font-size:20px; font-weight:700; color:#7C3AED; margin-top:12px; }}
+  .sponsors {{ text-align:center; margin-top:16px; }}
+  .sponsors .slabel {{ font-size:9px; text-transform:uppercase; letter-spacing:.15em; color:#94a3b8; margin-bottom:8px; }}
+  .sponsors table {{ margin:0 auto; border-collapse:collapse; }}
+  .sponsors td {{ padding:0 10px; vertical-align:middle; }}
+  .sponsors td img {{ max-height:32px; max-width:90px; }}
   .footer {{ display:flex; justify-content:space-between; align-items:flex-end; }}
   .line {{ width:200px; border-top:2px solid #E5E7EB; padding-top:10px;
            font-size:11px; color:#9CA3AF; letter-spacing:.15em; text-transform:uppercase; }}
@@ -5363,6 +5370,7 @@ DUMMY_CERTIFICATE_HTML = """
     <div class="desc">has successfully completed the course and demonstrated proficiency in</div>
     <div class="course">{course_title}</div>
   </div>
+  {sponsor_section}
   <div class="footer">
     <div class="line">{issue_date}<br/>Date Issued</div>
     <div class="seal">S</div>
@@ -5430,22 +5438,12 @@ async def get_certificate_html(user_id: str, cert_id: str):
     course_title = "Studlyf Starter Certificate"
     issue_date = datetime.utcnow().strftime("%d %B %Y")
 
+    template_id = "standard"
     if cert:
         student_name = cert.get("student_name", student_name)
         course_title = cert.get("course_title", course_title)
         issue_date = cert.get("issue_date", issue_date)
         template_id = cert.get("template_id", "standard")
-        # Check if admin uploaded a custom template
-        tmpl_doc = await cert_templates_col.find_one({"template_id": template_id})
-        if tmpl_doc and tmpl_doc.get("html_content"):
-            html = tmpl_doc["html_content"].format(
-                student_name=student_name,
-                course_title=course_title,
-                issue_date=issue_date,
-                certificate_id=cert_id
-            )
-            from fastapi.responses import HTMLResponse
-            return HTMLResponse(content=html)
     elif event_cert:
         student_name = event_cert.get("participant_name", student_name)
         course_title = f"{event_cert.get('event_title', course_title)} - {event_cert.get('achievement_type', 'Participation')}"
@@ -5458,13 +5456,63 @@ async def get_certificate_html(user_id: str, cert_id: str):
             except Exception:
                 issued_value = str(issued_value)
         issue_date = issued_value or issue_date
+        template_id = event_cert.get("template_id", "standard")
+
+    # Check if admin uploaded a custom template
+    if template_id and template_id != "standard":
+        tmpl_doc = await cert_templates_col.find_one({"template_id": template_id})
+        if tmpl_doc and tmpl_doc.get("html_content"):
+            html = tmpl_doc["html_content"]
+            # Get event details/achievement details
+            achievement_label = ""
+            cert_type = ""
+            rank_str = ""
+            if event_cert:
+                from services.institutional_certificate_service import ACHIEVEMENT_TYPES
+                cert_type = event_cert.get("achievement_type") or "participation"
+                achievement_label = ACHIEVEMENT_TYPES.get(cert_type, "Participation")
+                rank_str = str(event_cert.get("rank") or "")
+            
+            for key, value in [
+                ("student_name", student_name),
+                ("course_title", course_title),
+                ("issue_date", issue_date),
+                ("certificate_id", cert_id),
+                ("rank", rank_str),
+                ("achievement_label", achievement_label),
+                ("cert_type", cert_type),
+            ]:
+                html = html.replace("{" + key + "}", str(value))
+            from fastapi.responses import HTMLResponse
+            return HTMLResponse(content=html)
+
+    # Build sponsor logos HTML
+    sponsor_html = ""
+    event_for_sponsors = cert or event_cert
+    if event_for_sponsors:
+        try:
+            ev_id = event_for_sponsors.get("event_id")
+            if ev_id:
+                ev_doc = await events_col.find_one({"_id": ObjectId(str(ev_id))})
+                if ev_doc:
+                    sponsors = ev_doc.get("sponsors") or []
+                    logo_tags = []
+                    for s in sponsors:
+                        logo = s.get("logo") if isinstance(s, dict) else None
+                        if logo:
+                            logo_tags.append(f'<td><img src="{logo}" alt="Sponsor"></td>')
+                    if logo_tags:
+                        sponsor_html = '<div class="sponsors"><div class="slabel">Sponsored By</div><table><tr>' + "".join(logo_tags) + "</tr></table></div>"
+        except Exception:
+            pass
 
     # Default dummy template
     html = DUMMY_CERTIFICATE_HTML.format(
         student_name=student_name,
         course_title=course_title,
         issue_date=issue_date,
-        certificate_id=cert_id
+        certificate_id=cert_id,
+        sponsor_section=sponsor_html,
     )
     from fastapi.responses import HTMLResponse
     return HTMLResponse(content=html)
