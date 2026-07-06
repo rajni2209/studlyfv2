@@ -14,7 +14,7 @@ const Footer: React.FC = () => {
             </div>
             
             <div className="flex-1 text-right opacity-60">
-                v1.0.4 | Support: support@studlyf.com
+                v1.0.4 | Support: {import.meta.env.VITE_SUPPORT_EMAIL || 'support@studlyf.com'}
             </div>
         </footer>
     );

@@ -137,10 +137,12 @@ async def login(
 
 # ========== EXAMPLE 2: SECURE CERTIFICATE DOWNLOAD ==========
 
+from auth_institution import get_auth_user
+
 @app.get("/download-certificate/{certificate_id}")
 async def download_certificate(
     certificate_id: str,
-    current_user: dict = Depends(lambda: {}),  # Requires authentication
+    current_user: dict = Depends(get_auth_user),  # Requires authentication
     db = None
 ):
     """

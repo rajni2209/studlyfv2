@@ -1,6 +1,7 @@
 import smtplib
 import os
 import time
+from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from html import escape
@@ -210,7 +211,7 @@ def get_payment_receipt_template(participant_name: str, event_name: str, organiz
     )
 
 
-def get_certificate_issued_template(
+async def get_certificate_issued_template(
     participant_name: str,
     event_title: str,
     organization_name: str,
@@ -218,48 +219,70 @@ def get_certificate_issued_template(
     issued_date: str,
     certificate_download_link: str,
     verification_url: str,
+    certificate_type: str = "Participation",
+    event_logo: str = "",
+    institution_logo: str = "",
 ) -> str:
-    return _email_shell(
-        f"Wow, look at your certificate | {_safe_text(event_title)} 🚀",
-        f"""
-        <div style="background:#1f4f8f;border-radius:18px;padding:28px 24px;color:#fff;overflow:hidden;position:relative;margin-bottom:24px;">
-            <div style="font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;opacity:.85;margin-bottom:14px;">{_safe_text(organization_name)}</div>
-            <div style="font-size:34px;line-height:1.05;font-weight:900;margin:0 0 14px 0;max-width:300px;">Woohoo!<br/>Time to become a celebrity on social media!</div>
-            <div style="font-size:15px;line-height:1.6;max-width:360px;opacity:.95;">Congratulations, here is your certificate for <strong>{_safe_text(event_title)}</strong> 🚀</div>
-            <div style="position:absolute;right:20px;bottom:12px;width:130px;height:130px;border-radius:999px;background:rgba(255,255,255,.08);"></div>
-        </div>
+    import os
+    frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
+    
+    # Fetch logos dynamically if not provided
+    if not event_logo or not institution_logo:
+        try:
+            from db import events_col, institutions_col
+            from bson import ObjectId
+            # Find the event using title or organization name
+            event_doc = await events_col.find_one({"title": event_title})
+            if not event_doc:
+                event_doc = await events_col.find_one({"organisation": organization_name})
+            if not event_doc:
+                event_doc = await events_col.find_one({"organization": organization_name})
+            
+            if event_doc:
+                if not event_logo:
+                    event_logo = event_doc.get("logo_url") or event_doc.get("logo") or event_doc.get("image_url") or ""
+                if not institution_logo:
+                    institution_logo = event_doc.get("institution_logo") or ""
+                if not institution_logo:
+                    inst_id = event_doc.get("institution_id")
+                    if inst_id:
+                        inst_doc = await institutions_col.find_one({"institution_id": str(inst_id)})
+                        if not inst_doc:
+                            inst_doc = await institutions_col.find_one({"_id": ObjectId(str(inst_id))})
+                        if inst_doc:
+                            institution_logo = (
+                                inst_doc.get("logo_url") or
+                                inst_doc.get("logo") or
+                                inst_doc.get("image_url") or ""
+                            )
+        except Exception:
+            pass
 
-        <div style="text-align:center;margin:0 0 14px 0;font-size:15px;color:#334155;">Congratulations, here is your certificate for <strong>{_safe_text(event_title)}</strong> 🚀</div>
+    from services.email_template_service import ensure_absolute_url
+    event_logo = ensure_absolute_url(event_logo)
+    institution_logo = ensure_absolute_url(institution_logo)
 
-        <div style="background:#eff6ff;border-radius:18px;padding:22px 18px;margin:0 auto 24px auto;max-width:280px;text-align:center;box-shadow:0 8px 24px rgba(37,99,235,.10);">
-            <div style="font-size:18px;font-weight:900;color:#1d4ed8;line-height:1.2;margin-bottom:18px;">Certificate of <br/>Participation</div>
-            <a href="{_safe_text(certificate_download_link)}" style="display:inline-block;padding:12px 22px;background:#215b9f;color:#fff;border-radius:999px;text-decoration:none;font-weight:800;font-size:14px;box-shadow:0 6px 14px rgba(33,91,159,.3);">Download</a>
-        </div>
-
-        <p style="margin:0 0 18px 0;color:#475569;line-height:1.7;text-align:center;">Share them on social media &amp; show the world your spirit of competitiveness that is going to reap you amazing rewards.</p>
-
-        <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:12px 0 22px 0;">
-            <span style="width:38px;height:38px;border-radius:999px;background:#1d4ed8;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;">WA</span>
-            <span style="width:38px;height:38px;border-radius:999px;background:#1d4ed8;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;">IN</span>
-            <span style="width:38px;height:38px;border-radius:999px;background:#1d4ed8;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;">FB</span>
-            <span style="width:38px;height:38px;border-radius:999px;background:#1d4ed8;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;">X</span>
-        </div>
-
-        <div style="background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:22px 16px;text-align:center;margin:0 -40px 0 -40px;">
-            <div style="font-size:28px;font-weight:900;color:#1d4ed8;line-height:1;margin-bottom:10px;">{_safe_text(organization_name)}</div>
-            <div style="font-size:14px;color:#475569;margin-bottom:12px;">Join our evergrowing unstoppable community</div>
-            <div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap;">
-                <span style="width:34px;height:34px;border-radius:999px;background:#e5e7eb;color:#64748b;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;">IG</span>
-                <span style="width:34px;height:34px;border-radius:999px;background:#e5e7eb;color:#64748b;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;">IN</span>
-                <span style="width:34px;height:34px;border-radius:999px;background:#e5e7eb;color:#64748b;display:inline-flex;alignments:center;justify-content:center;font-size:10px;font-weight:800;">TG</span>
-                <span style="width:34px;height:34px;border-radius:999px;background:#e5e7eb;color:#64748b;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;">YT</span>
-            </div>
-        </div>
-
-        <p style="margin:18px 0 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;">Queries? We’re just one email away: <a href="mailto:{_safe_text(os.getenv('VITE_SUPPORT_EMAIL', os.getenv('SUPPORT_EMAIL', 'support@studlyf.com')))}" style="color:#1d4ed8;text-decoration:none;font-weight:700;">{_safe_text(os.getenv('VITE_SUPPORT_EMAIL', os.getenv('SUPPORT_EMAIL', 'support@studlyf.com')))}</a> &middot; &copy; 2026 { _safe_text(organization_name) }. All rights reserved.</p>
-        """,
-        subtitle="Your certificate is ready",
-        accent="#6C3BFF",
+    # We load the template from the new file
+    from jinja2 import Environment, FileSystemLoader
+    template_dir = os.path.join(os.path.dirname(__file__), '../templates')
+    env = Environment(loader=FileSystemLoader(template_dir))
+    template = env.get_template('certificate_issued_new.html')
+    
+    return template.render(
+        participant_name=participant_name,
+        event_name=event_title,
+        institution_name=organization_name,
+        certificate_type=certificate_type,
+        certificate_id=certificate_id,
+        issue_date=issued_date,
+        download_url=certificate_download_link,
+        verification_url=verification_url,
+        institution_linkedin=os.getenv("INSTITUTION_LINKEDIN", "#"),
+        institution_instagram=os.getenv("INSTITUTION_INSTAGRAM", "#"),
+        institution_twitter=os.getenv("INSTITUTION_TWITTER", "#"),
+        institution_youtube=os.getenv("INSTITUTION_YOUTUBE", "#"),
+        institution_logo=institution_logo,
+        event_logo=event_logo
     )
 
 def get_team_invite_template(
@@ -433,7 +456,7 @@ def get_certificate_template(user_name: str, event_name: str, rank: str = None, 
                         <!-- Footer -->
                         <tr>
                             <td style="background-color: #F8FAFC; padding: 20px; text-align: center;">
-                                <p style="margin: 0; font-size: 12px; color: #94A3B8;">Studlyf Communication Portal • 2026</p>
+                                <p style="margin: 0; font-size: 12px; color: #94A3B8;">Studlyf Communication Portal • {datetime.utcnow().year}</p>
                             </td>
                         </tr>
                     </table>
@@ -491,7 +514,7 @@ def get_announcement_template(user_name: str, event_name: str, message: str, nex
                         <!-- Footer -->
                         <tr>
                             <td style="background-color: #F8FAFC; padding: 20px; text-align: center;">
-                                <p style="margin: 0; font-size: 12px; color: #94A3B8;">Studlyf Communication Portal • 2026</p>
+                                <p style="margin: 0; font-size: 12px; color: #94A3B8;">Studlyf Communication Portal • {datetime.utcnow().year}</p>
                             </td>
                         </tr>
                     </table>
@@ -530,7 +553,7 @@ def _email_shell(title: str, body_html: str, subtitle: str = "", accent: str = "
                         </tr>
                         <tr>
                             <td style="background:#f8fafc;padding:18px;text-align:center;border-top:1px solid #e2e8f0;">
-                                <p style="margin:0;font-size:12px;color:#94a3b8;">Studlyf Communication Portal • 2026</p>
+                                <p style="margin:0;font-size:12px;color:#94a3b8;">Studlyf Communication Portal • {datetime.utcnow().year}</p>
                             </td>
                         </tr>
                     </table>

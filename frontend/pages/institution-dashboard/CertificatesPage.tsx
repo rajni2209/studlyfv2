@@ -623,6 +623,24 @@ const CertificatesPage: React.FC<{ institutionId: string; onNavigate?: (tab: str
         </div>
       ) : showTemplateBuilder ? (
         <div className="fixed inset-0 z-50 bg-white p-8 overflow-y-auto">
+        <div className="fixed inset-0 z-50 bg-white p-8 overflow-y-auto">
+          <button 
+            onClick={() => { setShowTemplateBuilder(false); fetchTemplates(); }} 
+            className="mb-4 flex items-center text-sm text-slate-500 hover:text-indigo-600"
+          >
+            <XCircle className="w-4 h-4 mr-2" /> Back to Dashboard
+          </button>
+          
+          <CertificateTemplateBuilder 
+            institutionId={institutionId}
+            templates={templates} 
+            onSelect={selectTemplate} 
+            onUpdate={updateTemplate} 
+            onSave={saveTemplate} 
+            onDelete={deleteTemplate} 
+            selectedTemplate={selectedTemplate} 
+          />
+        </div>
           <button onClick={() => setShowTemplateBuilder(false)} className="mb-4 flex items-center text-sm text-slate-500 hover:text-indigo-600"><XCircle className="w-4 h-4 mr-2" /> Back to Dashboard</button>
           <CertificateTemplateBuilder institutionId={institutionId} />
         </div>
@@ -800,6 +818,26 @@ const CertificatesPage: React.FC<{ institutionId: string; onNavigate?: (tab: str
                             <td className="py-3 px-4">
                               <div className="flex items-center justify-center space-x-2 text-indigo-600">
                                 <Eye className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => setSelectedCertificate(c)} aria-label="Preview Certificate" />
+                                {!isPending && (
+                                  <>
+                                    <Download 
+                                      className="w-4 h-4 cursor-pointer hover:text-indigo-800" 
+                                      onClick={() => alert('Download certificate: ' + (c.certificate_id || c._id))} 
+                                      aria-label="Download PDF" 
+                                    />
+                                    <Mail 
+                                      className="w-4 h-4 cursor-pointer hover:text-indigo-800" 
+                                      onClick={() => { 
+                                        if (c.email) { 
+                                          alert('Send email to: ' + c.email); 
+                                        } else { 
+                                          alert('Email not available for this recipient'); 
+                                        } 
+                                      }} 
+                                      aria-label="Email Certificate" 
+                                    />
+                                  </>
+                                )}
                                 {!isPending && <><Download className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => alert('Download certificate: ' + (c.certificate_id || c._id))} aria-label="Download PDF" />
                                 <Mail className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => alert('Send email to: ' + c.email)} aria-label="Email Certificate" /></>}
                                 <MoreVertical className="w-4 h-4 cursor-pointer text-slate-400" />
@@ -1262,7 +1300,16 @@ const CertificateRulesManager: React.FC<{ institutionId: string; onClose: () => 
       };
       const url = editingRule ? `${API_BASE_URL}/api/v1/certificates/rules/${ruleId}` : `${API_BASE_URL}/api/v1/certificates/rules/`;
       const res = await fetch(url, { method: editingRule ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
-      if (res.ok) { setShowForm(false); setEditingRule(null); fetchRules(); }
+      if (res.ok) {
+        setShowForm(false);
+        setEditingRule(null);
+        if (editingRule) {
+          setRules(prev => prev.map(r => r.rule_id === ruleId ? { ...r, ...payload } : r));
+        } else {
+          const saved = await res.json().catch(() => payload);
+          setRules(prev => [...prev, saved]);
+        }
+      }
       else { const err = await res.json(); alert(err.detail || 'Failed to save rule'); }
     } catch { alert('Failed to save rule'); } finally { setSaving(false); }
   };

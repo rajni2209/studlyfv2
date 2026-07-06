@@ -207,3 +207,18 @@ verify.py
 
 # Large build archives
 frontend/dist_v2.zip
+backend/scripts/clear_all_issued_certificates.py
+backend/scripts/clear_all_issued_certificates.py
+
+# Added diagnostic/template scripts to ignore
+check_all_templates.py
+check_template_version.py
+check_templates.py
+check_templates_v2.py
+debug_sponsors.py
+debug_templates_v3.py
+read_template.py
+scripts/migrate_logos_to_bson.py
+backend/scripts/check_cert_statuses.py
+backend/scripts/check_templates.py
+

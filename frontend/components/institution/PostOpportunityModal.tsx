@@ -740,7 +740,7 @@ const PostOpportunityModal: React.FC<PostOpportunityModalProps> = ({ isOpen, onC
                         <p className="text-[11px] text-slate-500 leading-relaxed mb-3 font-medium">
                             Facing any issues or need any help?
                         </p>
-                        <p className="text-[11px] font-bold text-slate-900 mb-1">Reach us at support@studlyf.com</p>
+                        <p className="text-[11px] font-bold text-slate-900 mb-1">Reach us at {import.meta.env.VITE_SUPPORT_EMAIL || 'support@studlyf.com'}</p>
                         <button onClick={() => setIsSupportDrawerOpen(true)} className="text-[11px] font-black text-[#6C3BFF] tracking-widest hover:underline">Get in touch with us here</button>
                     </div>
                 </div>

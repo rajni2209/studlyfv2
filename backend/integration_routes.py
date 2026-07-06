@@ -1,3 +1,4 @@
+import io
 from datetime import datetime, timezone, timedelta
 import asyncio
 import os
@@ -438,8 +439,8 @@ Good luck in the next round!"""
         "event_name": event.get("title", "StudLyf Hackathon"),
         "stage_name": stage_name,
         "participant_name": "Alex Mercer",
-        "deadline": "2026-05-29",
-        "event_link": "https://studlyf.in/dashboard/learner",
+        "deadline": (datetime.utcnow().isoformat()[:10] if hasattr(datetime, 'utcnow') else "2026-01-01"),
+        "event_link": f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/dashboard/learner",
     }
     
     from services.email_template_service import render_stage_custom_email
@@ -3169,26 +3170,212 @@ async def download_certificate(certificate_id: str):
         raise HTTPException(status_code=404, detail="Certificate not found or invalid.")
 
     from fastapi.responses import FileResponse
-    from services.certificate_service import certificate_service as pdf_certificate_service
 
-    issued_at = cert.get("issued_at") or cert.get("issued_date") or datetime.utcnow()
-    issued_date = issued_at.strftime("%B %d, %Y") if hasattr(issued_at, "strftime") else str(issued_at)
-    cert_data = {
-        "participant_name": cert.get("recipient_name") or cert.get("student_name") or "Participant",
-        "event_name": cert.get("event_name") or cert.get("event_title") or "Studlyf Event",
-        "organization_name": cert.get("organization_name") or cert.get("organization") or "Studlyf",
-        "event_date": issued_date,
-        "issued_date": issued_date,
-        "certificate_id": certificate_id,
-        "verification_url": cert.get("verification_url") or f"{os.getenv('FRONTEND_URL', 'https://studlyf.in')}/verify/{certificate_id}",
-        "achievement_type": cert.get("achievement_type") or cert.get("category") or "Participation",
-        "organizer_signature": cert.get("organization_name") or cert.get("organization") or "Studlyf",
-        "studlyf_signature": "Studlyf Authorized Signature",
-    }
-    pdf_path = await pdf_certificate_service.generate_certificate_pdf(cert_data)
-    media_type = "application/pdf" if str(pdf_path).lower().endswith(".pdf") else "text/html"
-    download_name = f"certificate_{certificate_id}.pdf" if media_type == "application/pdf" else f"certificate_{certificate_id}.html"
-    return FileResponse(pdf_path, media_type=media_type, filename=download_name)
+    if cert.get("pdf_path") and os.path.exists(cert["pdf_path"]):
+        return FileResponse(cert["pdf_path"], media_type="application/pdf", filename=f"certificate_{certificate_id}.pdf")
+
+    # Render HTML content (used both for PDF generation and HTML fallback)
+    import base64 as b64
+    import qrcode
+    from jinja2 import Environment, FileSystemLoader
+
+    template_dir = os.path.join(os.path.dirname(__file__), 'templates')
+    jinja_env = Environment(loader=FileSystemLoader(template_dir), autoescape=True)
+
+    v_url = cert.get("verification_url") or f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/#/verify/{certificate_id}"
+
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(v_url)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    qr_blob = b64.b64encode(buf.getvalue()).decode()
+
+    participant_name = cert.get("participant_name") or cert.get("recipient_name") or "Participant"
+    event_title = cert.get("event_title") or cert.get("event_name") or "Studlyf Event"
+    organization_name = cert.get("organization_name") or "Studlyf"
+    event_date = cert.get("event_date") or str(cert.get("issued_date") or datetime.now(timezone.utc).strftime("%B %d, %Y"))
+    issued_date = str(cert.get("issued_date") or datetime.now(timezone.utc).strftime("%B %d, %Y"))
+
+    event_logo = ""
+    institution_logo = ""
+    signatory_name = cert.get("signatory_name") or ""
+    signatory_title = cert.get("signatory_title") or ""
+    signatory_organization = cert.get("signatory_organization") or ""
+    sponsor_logos = []
+    signatures = []
+    try:
+        event_id = cert.get("event_id")
+        if event_id:
+            from bson import ObjectId
+            event_doc = await events_col.find_one({"_id": ObjectId(str(event_id))})
+            if event_doc:
+                event_logo = event_doc.get("logo_url") or event_doc.get("logo") or event_doc.get("image_url") or ""
+                institution_logo = event_doc.get("institution_logo") or ""
+                # If institution_logo is not stored on the event, fall back to the institution profile
+                if not institution_logo:
+                    inst_id = event_doc.get("institution_id") or cert.get("institution_id")
+                    if inst_id:
+                        try:
+                            from db import institutions_col
+                            inst_doc = await institutions_col.find_one({"institution_id": str(inst_id)})
+                            if not inst_doc:
+                                inst_doc = await institutions_col.find_one({"_id": ObjectId(str(inst_id))})
+                            if inst_doc:
+                                institution_logo = (
+                                    inst_doc.get("logo_url") or
+                                    inst_doc.get("logo") or
+                                    inst_doc.get("image_url") or ""
+                                )
+                        except Exception:
+                            pass
+                if not signatory_name:
+                    signatory_name = event_doc.get("signatory_name") or ""
+                    signatory_title = event_doc.get("signatory_title") or ""
+                    signatory_organization = event_doc.get("signatory_organization") or ""
+                sponsors = event_doc.get("sponsors") or []
+                for s in sponsors:
+                    logo = s.get("logo") or s.get("logo_url") or ""
+                    if logo and isinstance(logo, str):
+                        sponsor_logos.append(logo)
+                    elif logo and isinstance(logo, dict) and "data" in logo:
+                        import base64 as b64_mod
+                        b64_data = b64_mod.b64encode(logo["data"]).decode("utf-8")
+                        sponsor_logos.append(f"data:{logo.get('contentType')};base64,{b64_data}")
+                sigs = event_doc.get("signatories") or event_doc.get("signatures") or []
+                for s in sigs:
+                    sig_name = s.get("name") or s.get("signatory_name") or ""
+                    if sig_name:
+                        signatures.append({
+                            "name": sig_name,
+                            "title": s.get("title") or s.get("signatory_title") or "",
+                            "organization": s.get("organization") or s.get("signatory_organization") or "",
+                        })
+    except Exception:
+        pass
+
+    download_url = cert.get("download_url") or f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/api/v1/institution/download-certificate/{certificate_id}"
+    html = None
+    template_id = cert.get("template_id")
+    if template_id and template_id != "standard":
+        try:
+            cert_templates_col = db["cert_templates"]
+            tmpl_doc = await cert_templates_col.find_one({"template_id": template_id})
+            if tmpl_doc and tmpl_doc.get("html_content"):
+                from services.institutional_certificate_service import _replace_placeholders, ACHIEVEMENT_TYPES
+                # Construct signature placeholders
+                signatory_name = cert.get("signatory_name") or ""
+                signatory_title = cert.get("signatory_title") or ""
+                signatory_organization = cert.get("signatory_organization") or ""
+                if not signatory_name and signatures:
+                    signatory_name = signatures[0]["name"]
+                    signatory_title = signatures[0]["title"]
+                    signatory_organization = signatures[0]["organization"]
+                
+                # Build sponsor HTML if needed
+                sponsor_html = ""
+                if sponsor_logos:
+                    logo_tags = [f'<td><img src="{logo}" alt="Sponsor" style="height:40px;margin:5px;"></td>' for logo in sponsor_logos]
+                    sponsor_html = '<div class="sponsors"><div class="slabel">Sponsored By</div><table><tr>' + "".join(logo_tags) + "</tr></table></div>"
+
+                placeholder_kwargs = dict(
+                    student_name=participant_name,
+                    course_title=event_title,
+                    issue_date=issued_date,
+                    certificate_id=certificate_id,
+                    achievement_label=ACHIEVEMENT_TYPES.get(cert.get("achievement_type") or "participation", "Participation"),
+                    rank=str(cert.get("rank") or ""),
+                    cert_type=cert.get("achievement_type") or "participation",
+                    signatory_name=signatory_name,
+                    signatory_title=signatory_title,
+                    signatory_organization=signatory_organization if signatory_name else "",
+                    sponsor_logos=sponsor_html,
+                    institution_logo=institution_logo,
+                    event_logo=event_logo,
+                )
+                html = _replace_placeholders(tmpl_doc["html_content"], **placeholder_kwargs)
+                # Inject a download button at the bottom of the body so users viewing the custom HTML can download the PDF
+                download_bar_html = f"""
+    <div class="download-bar" style="text-align: center; margin-top: 30px; margin-bottom: 30px;">
+        <a href="{download_url}" download style="display: inline-block; padding: 14px 36px; background: #6C3BFF; color: #ffffff !important; border-radius: 8px; text-decoration: none; font-family: 'Poppins', sans-serif; font-size: 14px; font-weight: 700; box-shadow: 0 4px 12px rgba(108, 59, 255, 0.25);">Download PDF</a>
+    </div>
+"""
+                if "</body>" in html:
+                    html = html.replace("</body>", f"{download_bar_html}</body>")
+                else:
+                    html += download_bar_html
+        except Exception as e:
+            logger.error(f"Error rendering custom template {template_id}: {e}")
+
+    if not html:
+        try:
+            template = jinja_env.get_template('professional_certificate.html')
+        except Exception:
+            template = None
+
+        if template:
+            html = template.render(
+                participant_name=participant_name,
+                event_title=event_title,
+                organization_name=organization_name,
+                event_date=event_date,
+                certificate_id=certificate_id,
+                issued_date=issued_date,
+                qr_blob=qr_blob,
+                verification_url=v_url,
+                cert_short_id=certificate_id[-10:],
+                organizer_signature=organization_name,
+                sponsor_logos=sponsor_logos,
+                event_logo=event_logo,
+                institution_logo=institution_logo,
+                signatory_name=signatory_name,
+                signatory_title=signatory_title,
+                signatory_organization=signatory_organization if signatory_name else "",
+                signatures=signatures,
+                download_url=download_url,
+            )
+        else:
+            download_url = cert.get("download_url") or f"{os.getenv('FRONTEND_URL', 'http://localhost:3000')}/api/v1/institution/download-certificate/{certificate_id}"
+            html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Certificate</title>
+<style>body{{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8fafc;margin:0;}}
+.cert{{max-width:800px;width:100%;margin:40px auto;background:#fff;border:8px solid #6C3BFF;border-radius:24px;padding:48px;text-align:center;}}
+h1{{font-size:36px;margin:0 0 8px;color:#0f172a;}}h2{{font-size:20px;color:#6C3BFF;margin:0 0 24px;}}
+.name{{font-size:28px;font-weight:700;border-bottom:2px solid #0f172a;display:inline-block;padding:0 20px 8px;margin:16px 0;}}
+.detail{{color:#475569;margin:24px 0;line-height:1.8;}}.id{{font-family:monospace;color:#64748b;font-size:13px;}}
+.btn{{display:inline-block;margin-top:24px;padding:12px 32px;background:#6C3BFF;color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;}}</style>
+</head><body><div class="cert"><h1>CERTIFICATE</h1>
+<h2>{cert.get("certificate_type", "Participation")}</h2>
+<div class="name">{participant_name}</div>
+<div class="detail">for <strong>{event_title}</strong><br>
+Issued: {issued_date}</div>
+<div class="id">ID: {certificate_id}</div>
+<a class="btn" href="{download_url}">Download PDF</a>
+</div></body></html>"""
+
+    os.makedirs("artifacts/certs", exist_ok=True)
+    html_path = f"artifacts/certs/certificate_{certificate_id}.html"
+
+    # Try to generate PDF; fall back to HTML
+    try:
+        from weasyprint import HTML
+        pdf_path = f"artifacts/certs/certificate_{certificate_id}.pdf"
+        HTML(string=html).write_pdf(pdf_path)
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html)
+
+        col = certificates_col if await certificates_col.find_one({"certificate_id": certificate_id}) else event_certificates_col
+        await col.update_one({"certificate_id": certificate_id}, {"$set": {"pdf_path": pdf_path}})
+        return FileResponse(pdf_path, media_type="application/pdf", filename=f"certificate_{certificate_id}.pdf")
+    except Exception as e:
+        logger.error(f"PDF generation failed for {certificate_id}, serving HTML: {e}")
+        with open(html_path, "w", encoding="utf-8") as f:
+            f.write(html)
+
+        col = certificates_col if await certificates_col.find_one({"certificate_id": certificate_id}) else event_certificates_col
+        await col.update_one({"certificate_id": certificate_id}, {"$set": {"html_path": html_path}})
+        from fastapi.responses import HTMLResponse
+        return HTMLResponse(content=html)
 
 @router.options("/notifications/{institution_id}")
 async def options_notifications(institution_id: str):
@@ -7091,7 +7278,7 @@ async def bulk_onboard_members(data: dict, user: dict = Depends(get_current_user
                         <p style="font-size: 14px; font-weight: 500; text-align: center;">Need assistance? Our team is available 24/7 to help you settle in.</p>
                     </div>
                     <div class="footer">
-                        <p style="margin-bottom: 10px;">&copy; 2026 Studlyf Technologies Inc. All Rights Reserved.</p>
+                        <p style="margin-bottom: 10px;">&copy; {datetime.utcnow().year} Studlyf Technologies Inc. All Rights Reserved.</p>
                         <p>You received this because an authorized administrator at {inst_id} invited you to their private network.</p>
                     </div>
                 </div>

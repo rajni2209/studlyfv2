@@ -339,7 +339,7 @@ export default function AchievementRegistry() {
           <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="p-4 border-b flex justify-between items-center">
               <h2 className="text-lg font-bold">Certificate Template Builder</h2>
-              <button onClick={() => setShowTemplateBuilder(false)} className="text-slate-500 hover:text-slate-700">Close</button>
+              <button onClick={() => { setShowTemplateBuilder(false); fetchTemplates(); }} className="text-slate-500 hover:text-slate-700">Close</button>
             </div>
             <div className="p-4">
               <CertificateTemplateBuilder institutionId={user?.institution_id || ''} />
@@ -598,6 +598,7 @@ export default function AchievementRegistry() {
                       <th className="py-3 px-4">Certificate ID</th>
                       <th className="py-3 px-4">Recipient</th>
                       <th className="py-3 px-4">Team / Entry</th>
+                      <th className="py-3 px-4">Rank</th>
                       <th className="py-3 px-4">Certificate Type</th>
                       <th className="py-3 px-4">Issued On</th>
                       <th className="py-3 px-4">Status</th>
@@ -625,6 +626,7 @@ export default function AchievementRegistry() {
                               <div className="text-[10px] text-slate-500">{c.email || ''}</div>
                             </td>
                             <td className="py-3 px-4 text-xs">{c.team_name || '-'}</td>
+                            <td className="py-3 px-4 text-xs font-bold">{c.rank != null ? `#${c.rank}` : '-'}</td>
                             <td className="py-3 px-4 text-xs flex items-center mt-2">{typeIcon(certType)}{certType}</td>
                             <td className="py-3 px-4 text-xs">
                               <div>{ft.date}</div>
@@ -651,7 +653,7 @@ export default function AchievementRegistry() {
                               <div className="flex items-center justify-center space-x-2 text-indigo-600">
                                 <Eye className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => setSelectedCertificate(c)} aria-label="Preview" />
                                 <Download className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => alert('Download certificate: ' + (c.certificate_id || c._id))} />
-                                <Mail className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => alert('Send email to: ' + c.email)} />
+                                <Mail className="w-4 h-4 cursor-pointer hover:text-indigo-800" onClick={() => { if (c.email) { alert('Send email to: ' + c.email); } else { alert('Email not available for this recipient'); } }} />
                                 {(c.status || '').toLowerCase() !== 'revoked' && (
                                   <XCircle className="w-4 h-4 cursor-pointer text-red-400 hover:text-red-600" onClick={async () => {
                                     if (!confirm('Revoke this certificate?')) return;
@@ -999,7 +1001,16 @@ const AchievementRulesManager: React.FC<{ institutionId: string; onClose: () => 
       };
       const url = editingRule ? `${API_BASE_URL}/api/v1/certificates/rules/${ruleId}` : `${API_BASE_URL}/api/v1/certificates/rules/`;
       const res = await fetch(url, { method: editingRule ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify(payload) });
-      if (res.ok) { setShowForm(false); setEditingRule(null); fetchRules(); }
+      if (res.ok) {
+        setShowForm(false);
+        setEditingRule(null);
+        if (editingRule) {
+          setRules(prev => prev.map(r => r.rule_id === ruleId ? { ...r, ...payload } : r));
+        } else {
+          const saved = await res.json().catch(() => payload);
+          setRules(prev => [...prev, saved]);
+        }
+      }
       else { const err = await res.json(); alert(err.detail || 'Failed to save rule'); }
     } catch { alert('Failed to save rule'); } finally { setSaving(false); }
   };

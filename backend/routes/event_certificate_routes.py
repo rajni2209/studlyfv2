@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from bson import ObjectId
 from datetime import datetime
-from db import events_col, users_col, participants_col, event_certificates_col
+from db import events_col, users_col, participants_col, event_certificates_col, cert_templates_col
 from auth_institution import get_auth_user, get_auth_user_optional
 from services.institutional_certificate_service import certificate_service, ACHIEVEMENT_TYPES, VALID_ACHIEVEMENTS
 from services.email_service import send_notification_email
@@ -96,10 +96,42 @@ async def download_user_certificate(
         from fastapi.responses import FileResponse
         return FileResponse(pdf_path, media_type="application/pdf", filename=f"certificate_{cert_id}.pdf")
 
-    # Fallback: redirect to static URL or render HTML
-    from fastapi.responses import RedirectResponse
-    frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
-    return RedirectResponse(url=f"{frontend_url}/certificates/{cert_id}.pdf")
+    # Fallback: render certificate HTML on-the-fly
+    from fastapi.responses import HTMLResponse
+    from services.institutional_certificate_service import _replace_placeholders, ACHIEVEMENT_TYPES
+
+    html = None
+    tmpl_doc = None
+    if cert.get("template_id"):
+        tmpl_doc = await cert_templates_col.find_one({"template_id": cert["template_id"]})
+    if tmpl_doc and tmpl_doc.get("html_content"):
+        html = _replace_placeholders(
+            tmpl_doc["html_content"],
+            student_name=cert.get("participant_name") or cert.get("recipient_name") or "Recipient",
+            course_title=cert.get("event_title") or "the event",
+            issue_date=cert.get("issued_date") or cert.get("issue_date") or "",
+            certificate_id=cert.get("certificate_id", ""),
+            achievement_label=ACHIEVEMENT_TYPES.get(cert.get("achievement_type", ""), "Participation"),
+            rank=str(cert.get("rank") or ""),
+            cert_type=cert.get("achievement_type", ""),
+        )
+
+    if not html:
+        html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>Certificate</title>
+<style>body{{font-family:sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8fafc;margin:0;}}
+.cert{{max-width:800px;width:100%;margin:40px auto;background:#fff;border:8px solid #6C3BFF;border-radius:24px;padding:48px;text-align:center;}}
+h1{{font-size:36px;margin:0 0 8px;color:#0f172a;}}h2{{font-size:20px;color:#6C3BFF;margin:0 0 24px;}}
+.name{{font-size:28px;font-weight:700;border-bottom:2px solid #0f172a;display:inline-block;padding:0 20px 8px;margin:16px 0;}}
+.detail{{color:#475569;margin:24px 0;line-height:1.8;}}.id{{font-family:monospace;color:#64748b;font-size:13px;}}</style>
+</head><body><div class="cert"><h1>CERTIFICATE</h1>
+<h2>{ACHIEVEMENT_TYPES.get(cert.get("achievement_type", ""), "Participation")}</h2>
+<div class="name">{cert.get("participant_name") or cert.get("recipient_name") or "Recipient"}</div>
+<div class="detail">for <strong>{cert.get("event_title") or "the event"}</strong><br>
+Issued: {cert.get("issued_date") or cert.get("issue_date") or ""}</div>
+<div class="id">ID: {cert.get("certificate_id", "")}</div>
+</div></body></html>"""
+
+    return HTMLResponse(content=html)
 
 
 @router.get("/{event_id}/certificates/{user_id}")

@@ -5,6 +5,66 @@ from bson import ObjectId
 
 logger = logging.getLogger("email_template_service")
 
+def ensure_absolute_url(logo_val: str) -> str:
+    if not logo_val:
+        return ""
+    
+    # Check if logo_val is a base64 data URI
+    if logo_val.startswith("data:image/"):
+        try:
+            import base64
+            import uuid
+            import re
+            import os
+            
+            # Find the header and data parts
+            match = re.match(r'^data:image/(\w+);base64,(.+)$', logo_val)
+            if match:
+                ext = match.group(1)
+                b64_data = match.group(2)
+                
+                # Standardize extension
+                if ext == "jpeg":
+                    ext = "jpg"
+                
+                # Create a unique filename
+                filename = f"logo_{uuid.uuid4().hex}.{ext}"
+                
+                # Target path in uploads folder (relative to backend/services/email_template_service.py)
+                uploads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'uploads'))
+                os.makedirs(uploads_dir, exist_ok=True)
+                file_path = os.path.join(uploads_dir, filename)
+                
+                # Write to file
+                with open(file_path, "wb") as f:
+                    f.write(base64.b64decode(b64_data))
+                
+                # Generate absolute URL
+                base_url = os.getenv("RENDER_EXTERNAL_URL", "https://api.studlyf.in").rstrip('/')
+                return f"{base_url}/uploads/{filename}"
+        except Exception as e:
+            logger.error(f"Error converting base64 logo: {e}")
+            return ""
+            
+    # Check if it is a relative path (e.g. starting with "/" or "uploads/")
+    if logo_val.startswith("/") or "uploads/" in logo_val:
+        import os
+        base_url = os.getenv("RENDER_EXTERNAL_URL", "https://api.studlyf.in").rstrip('/')
+        if "uploads/" in logo_val:
+            idx = logo_val.index("uploads/")
+            rel = logo_val[idx:]
+        else:
+            rel = logo_val.lstrip("/")
+        return f"{base_url}/{rel}"
+        
+    # If it is already an absolute HTTP/HTTPS URL, return it
+    if logo_val.startswith("http://") or logo_val.startswith("https://"):
+        return logo_val
+        
+    # Otherwise, return it as-is
+    return logo_val
+
+
 # ─── Default templates (seeded on event creation) ──────────────────────
 
 def _wrap_premium_html_shell(content_html: str, title: str, accent_color: str = "#7C3AED", emoji: str = "🎉") -> str:
@@ -45,7 +105,7 @@ def _wrap_premium_html_shell(content_html: str, title: str, accent_color: str = 
                         Empowering builders, learning, and hackathons worldwide.
                     </p>
                     <p style="margin: 6px 0 0 0; font-size: 11px; color: #cbd5e1; font-family: 'Poppins', sans-serif', sans-serif;">
-                        &copy; 2026 Studlyf Platform. All rights reserved. &bull; <a href="{{{{frontend_url}}}}" style="color: {accent_color}; text-decoration: none; font-weight: 600;">Visit Platform</a>
+                        &copy; {datetime.utcnow().year} Studlyf Platform. All rights reserved. &bull; <a href="{{{{frontend_url}}}}" style="color: {accent_color}; text-decoration: none; font-weight: 600;">Visit Platform</a>
                     </p>
                 </td>
             </tr>
@@ -209,32 +269,121 @@ DEFAULT_TEMPLATES = {
     "certificate_issued": {
         "name": "Certificate Issued",
         "type": "certificate_issued",
-        "subject": "Wow, look at your certificate | {{event_title}} 🚀",
-        "placeholders": ["participant_name", "event_title", "organization_name", "certificate_id", "issued_date", "certificate_download_link", "verification_url"],
+        "subject": "🎉 Your Certificate is Ready – {{event_title}}",
+        "placeholders": ["participant_name", "event_title", "organization_name", "certificate_id", "issued_date", "certificate_download_link", "verification_url", "certificate_type"],
         "is_default": True,
-        "emoji": "🎓",
-        "body_html": """<div style=\"background:#1f4f8f;border-radius:18px;padding:28px 24px;color:#fff;overflow:hidden;position:relative;margin-bottom:24px;\">
-    <div style=\"font-size:12px;font-weight:800;letter-spacing:2px;text-transform:uppercase;opacity:.85;margin-bottom:14px;\">{{organization_name}}</div>
-    <div style=\"font-size:34px;line-height:1.05;font-weight:900;margin:0 0 14px 0;max-width:300px;\">Woohoo!<br/>Time to become a celebrity on social media!</div>
-    <div style=\"font-size:15px;line-height:1.6;max-width:360px;opacity:.95;\">Congratulations, here is your certificate for <strong>{{event_title}}</strong> 🚀</div>
+        "full_layout": True,
+        "emoji": "🎉",
+        "body_html": """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Certificate Issued</title>
+<style>
+  body { font-family: 'Poppins', Arial, sans-serif; margin: 0; padding: 0; background: #6C3BFF; color: #334155; -webkit-font-smoothing: antialiased; }
+  .container { max-width: 600px; margin: 20px auto; background: #fff; border-radius: 24px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(124,58,237,0.05); }
+  .header { background: linear-gradient(135deg, #6C3BFF, #4f46e5); padding: 32px 40px; text-align: center; color: #fff; }
+  .header .studlyf { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 2.5px; color: rgba(255,255,255,0.8); margin-bottom: 4px; }
+  .logos { display: flex; justify-content: center; gap: 20px; margin: 20px 0; }
+  .logos img { height: 50px; border-radius: 8px; }
+  .content { padding: 32px 40px; }
+  .emoji-hdr { font-size: 32px; line-height: 1; margin-bottom: 8px; }
+  h1 { font-size: 20px; font-weight: 900; margin: 0 0 4px 0; color: #fff; letter-spacing: -0.5px; }
+  h2 { font-size: 18px; font-weight: 800; color: #0f172a; margin: 24px 0 12px 0; }
+  .congrats { font-size: 16px; color: #475569; line-height: 1.7; margin: 0 0 8px 0; text-align: center; }
+  .congrats strong { color: #0f172a; }
+  .btn-primary { display: inline-block; padding: 14px 32px; background: #6C3BFF; color: #fff; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 14px; margin: 8px 4px; box-shadow: 0 6px 14px rgba(108,55,255,0.35); }
+  .btn-secondary { display: inline-block; padding: 14px 32px; background: #475569; color: #fff; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 14px; margin: 8px 4px; }
+  .btn-cta { display: inline-block; padding: 14px 32px; background: #111827; color: #fff; border-radius: 999px; text-decoration: none; font-weight: 800; font-size: 14px; margin: 8px 4px; }
+  .btn-center { text-align: center; margin: 20px 0; }
+  .detail-box { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 16px; padding: 20px 24px; margin: 20px 0; }
+  .detail-box p { margin: 6px 0; font-size: 13px; color: #475569; }
+  .detail-box .label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #94a3b8; }
+  .detail-box .value { font-size: 14px; font-weight: 600; color: #0f172a; }
+  .social { text-align: center; margin: 24px 0; }
+  .social a { display: inline-block; width: 40px; height: 40px; border-radius: 50%; background: #ffffff; border: 1px solid #e2e8f0; margin: 0 4px; text-decoration: none; text-align: center; line-height: 40px; vertical-align: middle; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+  .social a img { width: 22px; height: 22px; vertical-align: middle; display: inline-block; margin-top: 9px; border: none; }
+  .social a:hover { border-color: #cbd5e1; background: #f8fafc; }
+  .share-text { font-size: 14px; color: #64748b; text-align: center; margin: 16px 0; }
+  .explore-section { background: #f5f3ff; border-radius: 16px; padding: 24px; margin: 20px 0; text-align: center; }
+  .explore-section h3 { font-size: 16px; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; }
+  .explore-tags { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+  .explore-tag { background: #fff; border: 1px solid #ddd6fe; border-radius: 999px; padding: 6px 16px; font-size: 12px; font-weight: 600; color: #6C3BFF; }
+  .footer { background: #fafafa; padding: 24px 40px; border-top: 1px solid #f1f5f9; text-align: center; }
+  .footer p { margin: 4px 0; font-size: 12px; color: #94a3b8; }
+  .footer a { color: #6C3BFF; text-decoration: none; font-weight: 600; }
+  .follow-links { margin: 12px 0; }
+  .follow-links a { color: #64748b; text-decoration: none; font-size: 12px; margin: 0 8px; font-weight: 600; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 20px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="studlyf">STUDLYF</div>
+    <div class="logos">
+      <img src="{{institution_logo}}" alt="Institution" style="max-height:50px;">
+      <img src="{{event_logo}}" alt="Event" style="max-height:50px;">
+    </div>
+    <div class="emoji-hdr">🎓</div>
+    <h1>CERTIFICATE ACHIEVED</h1>
+  </div>
+  <div class="content">
+    <p class="congrats">You did it, <strong>{{participant_name}}</strong>! 🎯</p>
+    <p class="congrats">Your <strong>{{certificate_type}}</strong> certificate for <strong>{{event_title}}</strong> has been officially issued by <strong>{{organization_name}}</strong> through Studlyf.</p>
+
+    <hr>
+
+    <div class="detail-box">
+      <p><span class="label">Certificate ID</span><br><span class="value">{{certificate_id}}</span></p>
+      <p><span class="label">Certificate Type</span><br><span class="value">{{certificate_type}}</span></p>
+      <p><span class="label">Issued On</span><br><span class="value">{{issued_date}}</span></p>
+      <p><span class="label">Organizer</span><br><span class="value">{{organization_name}}</span></p>
+      <p><span class="label">Participant</span><br><span class="value">{{participant_name}}</span></p>
+    </div>
+
+    <div class="btn-center">
+      <a href="{{certificate_download_link}}" class="btn-primary" style="color: #ffffff !important; text-decoration: none;">⬇ Download Certificate</a>
+      <a href="{{verification_url}}" class="btn-secondary" style="color: #ffffff !important; text-decoration: none;">🔍 Verify Certificate</a>
+    </div>
+
+    <hr>
+
+    <h2 style="text-align:center;">🌟 Flaunt Your Achievement</h2>
+    <p class="share-text">Share your certificate with the world and let your hard work shine.</p>
+    <div class="social">
+      <a href="https://www.linkedin.com/sharing/share-offsite/?url={{verification_url}}" target="_blank" title="LinkedIn" style="line-height:40px;"><span style="color:#0A66C2;font-weight:bold;font-size:16px;font-family:Arial,sans-serif;vertical-align:middle;">in</span></a>
+      <a href="https://twitter.com/intent/tweet?text=I%20just%20earned%20my%20{{certificate_type}}%20for%20{{event_title}}%20on%20Studlyf!%20{{verification_url}}" target="_blank" title="X" style="line-height:40px;"><span style="color:#000000;font-weight:bold;font-size:16px;font-family:Arial,sans-serif;vertical-align:middle;">𝕏</span></a>
+      <a href="https://www.facebook.com/sharer/sharer.php?u={{verification_url}}" target="_blank" title="Facebook" style="line-height:40px;"><span style="color:#1877F2;font-weight:bold;font-size:18px;font-family:Arial,sans-serif;vertical-align:middle;">f</span></a>
+    </div>
+
+    <hr>
+
+    <hr>
+
+    <div style="text-align:center;">
+      <p style="font-size:12px;color:#64748b;margin:0;">Need Help?</p>
+      <p style="margin:4px 0;font-size:13px;"><a href="mailto:{{support_email}}" style="color:#6C3BFF;text-decoration:none;font-weight:600;">📧 {{support_email}}</a></p>
+    </div>
+
+    <hr>
+
+    <div class="follow-links" style="text-align:center;">
+      <p style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#94a3b8;margin:0 0 8px 0;">Follow Studlyf</p>
+      <a href="https://www.linkedin.com/company/studlyf/" style="color:#64748b;text-decoration:none;font-size:12px;font-weight:600;">LinkedIn</a> •
+      <a href="https://www.instagram.com/studlyf.in/" style="color:#64748b;text-decoration:none;font-size:12px;font-weight:600;">Instagram</a>
+    </div>
+  </div>
+  <div class="footer">
+    <p>Powered by Studlyf</p>
+    <p style="font-size:10px;color:#94a3b8;">Empowering Students • Institutions • Recruiters • Hackathons</p>
+    <p>&copy; 2026 Studlyf Platform. All Rights Reserved.</p>
+    <p style="font-size:11px;"><a href="#">Privacy Policy</a> • <a href="#">Terms of Service</a></p>
+  </div>
 </div>
-<div style=\"text-align:center;margin:0 0 14px 0;font-size:15px;color:#334155;\">Congratulations, here is your certificate for <strong>{{event_title}}</strong> 🚀</div>
-<div style=\"background:#eff6ff;border-radius:18px;padding:22px 18px;margin:0 auto 24px auto;max-width:280px;text-align:center;box-shadow:0 8px 24px rgba(37,99,235,.10);\">
-    <div style=\"font-size:18px;font-weight:900;color:#1d4ed8;line-height:1.2;margin-bottom:18px;\">Certificate of <br/>Participation</div>
-    <a href=\"{{certificate_download_link}}\" style=\"display:inline-block;padding:12px 22px;background:#215b9f;color:#fff;border-radius:999px;text-decoration:none;font-weight:800;font-size:14px;box-shadow:0 6px 14px rgba(33,91,159,.3);\">Download</a>
-</div>
-<p style=\"margin:0 0 18px 0;color:#475569;line-height:1.7;text-align:center;\">Share them on social media &amp; show the world your spirit of competitiveness that is going to reap you amazing rewards.</p>
-<div style=\"display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:12px 0 22px 0;\">
-    <span style=\"width:38px;height:38px;border-radius:999px;background:#1d4ed8;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;\">WA</span>
-    <span style=\"width:38px;height:38px;border-radius:999px;background:#1d4ed8;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;\">IN</span>
-    <span style=\"width:38px;height:38px;border-radius:999px;background:#1d4ed8;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;\">FB</span>
-    <span style=\"width:38px;height:38px;border-radius:999px;background:#1d4ed8;color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:11px;\">X</span>
-</div>
-<div style=\"background:#f8fafc;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;padding:22px 16px;text-align:center;margin:0 -40px 0 -40px;\">
-    <div style=\"font-size:28px;font-weight:900;color:#1d4ed8;line-height:1;margin-bottom:10px;\">{{organization_name}}</div>
-    <div style=\"font-size:14px;color:#475569;margin-bottom:12px;\">Join our evergrowing unstoppable community</div>
-</div>
-<p style=\"margin:18px 0 0 0;color:#94a3b8;font-size:12px;line-height:1.6;text-align:center;\">Queries? We’re just one email away: <a href=\"mailto:{{support_email}}\" style=\"color:#1d4ed8;text-decoration:none;font-weight:700;\">{{support_email}}</a> &middot; &copy; 2026 {{organization_name}}. All rights reserved.</p>"""
+</body>
+</html>"""
     },
     "certificate_content": {
         "name": "Certificate Details",
@@ -550,11 +699,18 @@ def render_template(template: dict, context: dict) -> (str, str):
     """
     import os
     frontend_url = os.getenv("FRONTEND_URL", "https://studlyf.in")
+    support_email = os.getenv("VITE_SUPPORT_EMAIL") or os.getenv("SUPPORT_EMAIL") or "support@studlyf.com"
     
     full_context = {
         "frontend_url": frontend_url,
+        "current_year": str(datetime.utcnow().year),
+        "support_email": support_email,
     }
     full_context.update(context)
+    if "institution_logo" in full_context:
+        full_context["institution_logo"] = ensure_absolute_url(full_context["institution_logo"])
+    if "event_logo" in full_context:
+        full_context["event_logo"] = ensure_absolute_url(full_context["event_logo"])
 
     subject = template.get("subject", "")
     inner_body = template.get("body_html", "")
@@ -880,6 +1036,7 @@ def render_stage_custom_email(subject_override: str, body_markdown: str, context
     # Resolve context placeholders in both subject and full HTML
     full_context = {
         "frontend_url": frontend_url,
+        "current_year": str(datetime.utcnow().year),
     }
     full_context.update(context)
 
