@@ -21,7 +21,7 @@ from services.ai_tools_scraper import fetch_ai_tools
 from jinja2 import Environment, FileSystemLoader, Template
 from fastapi.responses import HTMLResponse
 import json
-from time import time
+# Avoid import collision with import time below
 import asyncio
 from services.email_service import send_notification_email, get_registration_template, get_announcement_template
 from datetime import datetime, timezone
@@ -81,13 +81,13 @@ def cache_get(key: str):
     if not item:
         return None
     html, expiry = item
-    if expiry and expiry < time():
+    if expiry and expiry < time.time():
         _html_cache.pop(key, None)
         return None
     return html
 
 def cache_set(key: str, html: str, ttl: int = 60):
-    expiry = time() + ttl if ttl and ttl > 0 else None
+    expiry = time.time() + ttl if ttl and ttl > 0 else None
     _html_cache[key] = (html, expiry)
 
 
@@ -822,7 +822,7 @@ from routes import stage_navigation_routes, team_join_request_routes, hackathon_
 from routes import student_features_routes
 from routes import event_certificate_routes, registration_flow_routes
 from routes import achievement_registry_routes
-from routes import eligibility_rule_routes
+from routes import eligibility_rule_routes, blocked_entities_routes, communication_routes
 
 import hackathon_integration_routes
 import participant_card_routes
@@ -909,7 +909,8 @@ app.include_router(registration_flow_routes.router)
 app.include_router(stage_endpoints.router)
 from routes import company_simulator
 app.include_router(company_simulator.router, prefix="/api/company-simulator")
-
+app.include_router(blocked_entities_routes.router)
+app.include_router(communication_routes.router)
 
 
 @app.get("/api/user/{user_id}/badges")
@@ -6275,6 +6276,8 @@ async def get_user_profile(user_id: str):
             "newsletter": profile.get("newsletter", False),
             "isCurrentStudent": profile.get("isCurrentStudent", True),
             "isCurrentEmployee": profile.get("isCurrentEmployee", False),
+            "oneStrongWord": profile.get("oneStrongWord", ""),
+            "githubUsername": profile.get("githubUsername", ""),
         }
         return result
     except HTTPException:
@@ -6343,7 +6346,7 @@ async def update_profile(user_id: str, data: dict = Body(...)):
             "resume",
             "linkedin", "github", "twitter", "portfolio", "leetcode", "hackerrank",
             "searchStatus", "profileVisible", "newsletter",
-            "isCurrentStudent", "isCurrentEmployee",
+            "isCurrentStudent", "isCurrentEmployee", "oneStrongWord", "githubUsername",
         ]
         for field in allowed_fields:
             if field in data:
@@ -6517,7 +6520,7 @@ async def forgot_password(data: dict = Body(...)):
     
     # Generate secure token and persist to DB so it survives restarts
     token = secrets.token_urlsafe(32)
-    expiry_ts = int(time() + 3600)  # 1 hour expiry (unix ts)
+    expiry_ts = int(time.time() + 3600)  # 1 hour expiry (unix ts)
     try:
         # Use a dedicated collection for password resets
         # Persist a token_hash to avoid unique-index conflicts on null values
@@ -6569,7 +6572,7 @@ async def reset_password(data: dict = Body(...)):
     if not token_doc:
         raise HTTPException(status_code=400, detail="Invalid or expired token")
 
-    if int(time()) > int(token_doc.get("expiry", 0)):
+    if int(time.time()) > int(token_doc.get("expiry", 0)):
         # remove expired token
         try:
             await db.password_resets.delete_one({"token": token})
@@ -6691,7 +6694,7 @@ async def signup(user_data: UserSignup, request: Request):
     await users_col.insert_one({**user_doc, "email_verified": False})
 
     verification_token = secrets.token_urlsafe(32)
-    verification_expiry = int(time() + 86400)
+    verification_expiry = int(time.time() + 86400)
     try:
         await db.email_verifications.insert_one({
             "token": verification_token,
@@ -6734,7 +6737,7 @@ async def verify_email(data: dict = Body(...)):
         expiry = int(token_doc.get("expiry") or 0)
     except Exception:
         expiry = 0
-    if expiry and int(time()) > expiry:
+    if expiry and int(time.time()) > expiry:
         await db.email_verifications.delete_one({"token": token})
         raise HTTPException(status_code=400, detail="Verification link has expired")
 
@@ -6883,7 +6886,7 @@ async def resend_verification(data: dict = Body(...)):
         return {"status": "success", "message": "Email is already verified."}
 
     token = secrets.token_urlsafe(32)
-    expiry = int(time() + 86400)
+    expiry = int(time.time() + 86400)
     await db.email_verifications.update_one(
         {"email": email},
         {
@@ -7238,6 +7241,19 @@ async def upload_user_resume(user_id: str, file: UploadFile = File(...)):
         safe_filename = f"{user_id}_{file.filename}"
         file_path = os.path.join(upload_dir, safe_filename)
         
+        # Delete older resume if it exists to avoid storage leak
+        try:
+            existing_profile = await db["learner_profiles"].find_one({"user_id": user_id})
+            if existing_profile and "resume" in existing_profile:
+                old_resume = existing_profile["resume"]
+                if isinstance(old_resume, dict) and old_resume.get("filePath"):
+                    old_path_rel = old_resume["filePath"].lstrip("/")
+                    old_full_path = os.path.join(os.getcwd(), old_path_rel)
+                    if os.path.exists(old_full_path):
+                        os.remove(old_full_path)
+        except Exception as delete_err:
+            logger.warning(f"Could not delete older resume file: {delete_err}")
+
         file_bytes = await file.read()
         with open(file_path, "wb") as f:
             f.write(file_bytes)
@@ -7262,20 +7278,76 @@ async def upload_user_resume(user_id: str, file: UploadFile = File(...)):
             raise HTTPException(status_code=400, detail="Could not extract text from the file.")
             
         # Call Groq to parse
-        parsed_data_raw = parse_with_groq(text)
-        try:
-            parsed_data = json.loads(parsed_data_raw)
-        except:
-            parsed_data = {}
+        parsed_data = parse_with_groq(text)
+        if not isinstance(parsed_data, dict):
+            try:
+                parsed_data = json.loads(parsed_data)
+            except:
+                parsed_data = {}
             
-        # Compute dynamic ATS Score (simple heuristic for now)
-        word_count = len(text.split())
-        skills_extracted = parsed_data.get("skills", [])
-        experience = parsed_data.get("experience", [])
+        # Compute dynamic ATS Score using detailed 5-tier evaluation
+        score_details = {
+            "formatting": 15, # base score for clean parsable layout
+            "word_count": 0,
+            "skills": 0,
+            "experience": 0,
+            "projects": 0,
+            "contact_info": 0
+        }
         
-        ats_score = min(100, (word_count // 10) + (len(skills_extracted) * 2) + (len(experience) * 10))
-        if ats_score < 10:
-            ats_score = 45 # baseline for parsable file
+        # 1. Word count scoring (max 15 points)
+        word_count = len(text.split())
+        if 400 <= word_count <= 1000:
+            score_details["word_count"] = 15
+        elif 200 <= word_count < 400 or 1000 < word_count <= 1500:
+            score_details["word_count"] = 10
+        else:
+            score_details["word_count"] = 5
+            
+        # 2. Skills density (max 25 points)
+        skills_extracted = parsed_data.get("skills", [])
+        num_skills = len(skills_extracted)
+        if num_skills >= 15:
+            score_details["skills"] = 25
+        elif num_skills >= 8:
+            score_details["skills"] = 20
+        elif num_skills >= 3:
+            score_details["skills"] = 15
+        elif num_skills > 0:
+            score_details["skills"] = 5
+            
+        # 3. Work experience (max 20 points)
+        experience = parsed_data.get("experience", [])
+        num_exp = len(experience)
+        if num_exp >= 3:
+            score_details["experience"] = 20
+        elif num_exp == 2:
+            score_details["experience"] = 15
+        elif num_exp == 1:
+            score_details["experience"] = 10
+            
+        # 4. Projects (max 15 points)
+        projects = parsed_data.get("projects", [])
+        num_projects = len(projects)
+        if num_projects >= 3:
+            score_details["projects"] = 15
+        elif num_projects == 2:
+            score_details["projects"] = 10
+        elif num_projects == 1:
+            score_details["projects"] = 5
+            
+        # 5. Contact & structure details (max 10 points)
+        contact_score = 0
+        if parsed_data.get("email") or "@" in text:
+            contact_score += 3
+        if parsed_data.get("name") or len(parsed_data.get("name", "")) > 2:
+            contact_score += 3
+        if "http://" in text or "https://" in text or "linkedin.com" in text or "github.com" in text:
+            contact_score += 4
+        score_details["contact_info"] = contact_score
+        
+        ats_score = sum(score_details.values())
+        ats_score = max(10, min(100, ats_score))
             
         # Prepare response and DB update
         resume_metadata = {
@@ -7300,7 +7372,8 @@ async def upload_user_resume(user_id: str, file: UploadFile = File(...)):
             "skills": skills_extracted,
             "ats_score": ats_score,
             "word_count": word_count,
-            "message": "Resume uploaded, saved, and parsed successfully."
+            "message": "Resume uploaded, saved, and parsed successfully.",
+            "resume": resume_metadata
         }
     except HTTPException:
         raise
@@ -7584,31 +7657,48 @@ async def create_team():
 async def join_team(team_id: str):
     raise HTTPException(status_code=410, detail="Deprecated. Use /api/teams/join-by-invite (JWT required).")
 
-@app.patch("/api/participants/{p_id}/status", dependencies=[Depends(require_role(["Admin", "institution"]))])
+@app.patch("/api/participants/{p_id}/status", dependencies=[Depends(require_role(["admin", "super_admin", "Admin", "institution"]))])
 async def update_participant_status(p_id: str, status: str = Body(embed=True), current_user: dict = Depends(get_current_user)):
     """
     ADMIN: Verifies or rejects a participant registration.
     """
     from bson import ObjectId
     try:
-        await participants_col.update_one(
+        result = await participants_col.update_one(
             {"_id": ObjectId(p_id)},
             {"$set": {"registration_status": status, "updated_at": datetime.utcnow()}}
         )
-        await log_admin_action(current_user["email"], "PARTICIPANT_STATUS_UPDATE", f"Updated participant {p_id} to {status}")
+        
+        if result.matched_count == 0:
+            from db import opportunity_applications_col
+            result_opp = await opportunity_applications_col.update_one(
+                {"_id": ObjectId(p_id)},
+                {"$set": {"status": status, "updated_at": datetime.utcnow()}}
+            )
+            if result_opp.matched_count == 0:
+                raise HTTPException(status_code=404, detail="Participant/Application not found")
+            
+            p_doc = await opportunity_applications_col.find_one({"_id": ObjectId(p_id)})
+            event_title = "the opportunity"
+        else:
+            p_doc = await participants_col.find_one({"_id": ObjectId(p_id)})
+            event_title = p_doc.get("event_title", "the event") if p_doc else "the event"
+
+        await log_admin_action(current_user.get("sub", current_user.get("email", "unknown")), "PARTICIPANT_STATUS_UPDATE", f"Updated participant/application {p_id} to {status}")
         
         # Create In-App Notification for student
-        p_doc = await participants_col.find_one({"_id": ObjectId(p_id)})
-        if p_doc:
-            asyncio.create_task(notifications_col.insert_one({
+        if p_doc and p_doc.get("user_id"):
+            await notifications_col.insert_one({
                 "user_id": p_doc["user_id"],
                 "title": "Application Update",
-                "message": f"Your application for {p_doc.get('event_title', 'the event')} has been updated to: {status}.",
+                "message": f"Your application for {event_title} has been updated to: {status}.",
                 "type": "status_update",
                 "is_read": False,
                 "created_at": datetime.utcnow()
-            }))
+            })
         return {"status": "success"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -7623,7 +7713,7 @@ async def update_team_status(team_id: str, status: str = Body(embed=True), curre
             {"_id": ObjectId(team_id)},
             {"$set": {"status": status, "updated_at": datetime.utcnow()}}
         )
-        await log_admin_action(current_user["email"], "TEAM_STATUS_UPDATE", f"Updated team {team_id} to {status}")
+        await log_admin_action(current_user.get("sub", current_user.get("email", "unknown")), "TEAM_STATUS_UPDATE", f"Updated team {team_id} to {status}")
         
         # Create In-App Notification for all team members
         team_doc = await teams_col.find_one({"_id": ObjectId(team_id)})

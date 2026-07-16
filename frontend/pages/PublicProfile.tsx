@@ -1,7 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { API_BASE_URL } from '../apiConfig';
-import { ArrowLeft, Award, BadgeCheck, BookOpen, Briefcase, Calendar, Copy, Globe, MapPin, Share2, Sparkles, Star, TrendingUp, User } from 'lucide-react';
+import {
+  ArrowLeft, Award, Briefcase, Code, FileText,
+  Github, Globe, Linkedin, MapPin, Share2, Sparkles,
+  Star, Twitter, User, GraduationCap, Settings, Copy, Eye, Download, Link as LinkIcon, ShieldCheck
+} from 'lucide-react';
 import AvatarImage from '../components/AvatarImage';
 
 const PublicProfile: React.FC = () => {
@@ -13,7 +17,7 @@ const PublicProfile: React.FC = () => {
 
   const publicUrl = useMemo(() => {
     if (!userId || typeof window === 'undefined') return '';
-    return `${window.location.origin}/profile/${userId}`;
+    return `${window.location.origin}/#/profile/${userId}`;
   }, [userId]);
 
   useEffect(() => {
@@ -64,49 +68,13 @@ const PublicProfile: React.FC = () => {
     await copyLink();
   };
 
-  const skills = profile?.skills || [];
-  const achievements = profile?.achievements || [];
-  const projects = profile?.projects || [];
-  const experience = profile?.experienceList || [];
-  const certifications = profile?.certifications || [];
-  const isVisible = profile?.profileVisible ?? true;
-  const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || profile?.full_name || 'Contributor Profile';
-  const role = profile?.userType || profile?.role || 'Contributor';
-  const headline = profile?.bio || profile?.careerGoal || 'Contributor profile on Studlyf';
-
-  const stats = [
-    { label: 'Tests completed', value: (profile?.resume?.atsScore > 0 ? 1 : 0) + certifications.length + achievements.length, tone: 'emerald' },
-    { label: 'Contributions', value: projects.length + experience.length, tone: 'violet' },
-    { label: 'Skills', value: skills.length, tone: 'sky' },
-    { label: 'Activity score', value: Math.min(100, (skills.length * 8) + (projects.length * 10) + (achievements.length * 6) + (profile?.resume?.atsScore || 0) / 2), tone: 'amber' },
-  ];
-
-  const timeline = [
-    { title: 'Profile status', detail: isVisible ? 'Public profile is enabled and ready to share.' : 'This profile is currently limited in visibility.' },
-    { title: 'Portfolio signal', detail: `${projects.length} projects and ${experience.length} work entries are available.` },
-    { title: 'Skill density', detail: `${skills.length} skills are listed across the profile workspace.` },
-    { title: 'Recognition', detail: `${achievements.length} achievements and ${certifications.length} certifications are shown.` },
-  ];
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-[#F4F4F6] px-4 py-8 sm:px-6 lg:px-10">
-                <div className="mx-auto max-w-7xl space-y-6">
-                    <div className="w-32 h-10 bg-gray-200 rounded-2xl animate-pulse"></div>
-                    <div className="grid gap-6 xl:grid-cols-[1.35fr_0.9fr]">
-                        <div className="h-64 bg-white rounded-[3rem] p-10 animate-pulse border border-gray-100 flex gap-8">
-                            <div className="w-24 h-24 bg-gray-100 rounded-[2rem] shrink-0"></div>
-                            <div className="flex-1 space-y-4">
-                                <div className="w-1/2 h-10 bg-gray-100 rounded-lg"></div>
-                                <div className="w-1/3 h-6 bg-gray-100 rounded-lg"></div>
-                            </div>
-                        </div>
-                        <div className="h-64 bg-white rounded-[3rem] p-10 animate-pulse border border-gray-100"></div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F4F4F6] px-4 py-8 sm:px-6 lg:px-10 flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-[#7C3AED]/30 border-t-[#7C3AED] rounded-full animate-spin"></div>
+      </div>
+    );
+  }
 
   if (error || !profile) {
     return (
@@ -127,6 +95,19 @@ const PublicProfile: React.FC = () => {
     );
   }
 
+  const skills = Array.isArray(profile?.skills) ? profile.skills : [];
+  const achievements = Array.isArray(profile?.achievements) ? profile.achievements : [];
+  const projects = Array.isArray(profile?.projects) ? profile.projects : [];
+  const experience = Array.isArray(profile?.experienceList) ? profile.experienceList : [];
+  const certifications = Array.isArray(profile?.certifications) ? profile.certifications : [];
+  const education = Array.isArray(profile?.educationList) ? profile.educationList : [];
+  const isVisible = profile?.profileVisible ?? true;
+  const name = [profile?.firstName, profile?.lastName].filter(Boolean).join(' ') || profile?.full_name || 'Contributor Profile';
+  const role = profile?.userType || profile?.role || 'Contributor';
+  const headline = profile?.bio || profile?.careerGoal || 'Contributor profile on Studlyf';
+  const resume = profile?.resume;
+  const preference = profile?.preferredWork;
+
   return (
     <div className="min-h-screen bg-[#F4F4F6] px-4 py-8 sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
@@ -139,149 +120,355 @@ const PublicProfile: React.FC = () => {
           </div>
         </div>
 
-        <div className="grid gap-6 xl:grid-cols-[1.35fr_0.9fr]">
-          <section className="relative overflow-hidden rounded-[3rem] border border-gray-100 bg-white p-8 sm:p-10 shadow-[0_20px_60px_rgba(15,23,42,0.06)]">
-            <div className="absolute inset-0 bg-gradient-to-br from-[#7C3AED]/5 via-transparent to-[#06B6D4]/10 pointer-events-none" />
-            <div className="relative flex flex-col gap-8 lg:flex-row lg:items-center">
-              <div className="flex items-start gap-5 flex-1">
-                <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[2rem] border border-white bg-gray-50 shadow-xl ring-4 ring-[#7C3AED]/10">
-                  {profile.profilePhoto ? <AvatarImage src={profile.profilePhoto} alt={name} className="h-full w-full object-cover" /> : <User className="h-10 w-10 text-gray-300" />}
-                </div>
-                <div className="min-w-0">
-                  <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#7C3AED]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#7C3AED]">
-                    <Sparkles className="h-3 w-3" /> Contributor Profile
-                  </div>
+        {/* Hero Section */}
+        <section className="relative overflow-hidden rounded-[3rem] border border-gray-100 bg-white p-8 sm:p-10 shadow-[0_20px_60px_rgba(15,23,42,0.06)] w-full mb-8">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#7C3AED]/5 via-transparent to-[#06B6D4]/10 pointer-events-none" />
+
+          <div className="relative flex flex-col gap-8 md:flex-row md:items-start md:justify-between w-full">
+            <div className="flex items-start gap-5 flex-1 w-full">
+              <div className="flex h-24 w-24 shrink-0 items-center justify-center overflow-hidden rounded-[2rem] border border-white bg-gray-50 shadow-xl ring-4 ring-[#7C3AED]/10">
+                {profile.profilePhoto ? <AvatarImage src={profile.profilePhoto} alt={name} className="h-full w-full object-cover" /> : <User className="h-10 w-10 text-gray-300" />}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-2 flex-wrap">
                   <h1 className="break-words text-3xl font-black tracking-tight text-gray-900 sm:text-4xl">{name}</h1>
-                  <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-gray-500">
-                    <span className="rounded-full border border-gray-100 bg-gray-50 px-3 py-1 font-medium text-gray-700">{role}</span>
-                    {profile.location && <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" /> {profile.location}</span>}
-                    {profile.domain && <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 font-medium text-emerald-700">{profile.domain}</span>}
-                    {!isVisible && <span className="rounded-full border border-amber-100 bg-amber-50 px-3 py-1 font-medium text-amber-700">Visibility limited</span>}
-                  </div>
-                  <p className="mt-5 max-w-3xl text-sm leading-7 text-gray-600 sm:text-base">{headline}</p>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 lg:w-[280px]">
-                <div className="rounded-3xl border border-gray-100 bg-gray-50/80 p-4">
-                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Profile score</div>
-                  <div className="mt-3 text-3xl font-black text-gray-900">{Math.round(Math.min(100, (skills.length * 8) + (projects.length * 10) + (achievements.length * 6)))}</div>
-                  <div className="mt-3 h-2 rounded-full bg-gray-200 overflow-hidden">
-                    <div className="h-full rounded-full bg-[#7C3AED]" style={{ width: `${Math.min(100, (skills.length * 8) + (projects.length * 10) + (achievements.length * 6))}%` }} />
+                  {/* Social Links */}
+                  <div className="flex items-center gap-2 mt-2 sm:mt-0">
+                    {typeof profile.github === 'string' && profile.github.trim() && <a href={profile.github.startsWith('http') ? profile.github : `https://${profile.github}`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-gray-50 hover:bg-gray-100 text-gray-600 hover:text-gray-900 transition"><Github className="w-5 h-5" /></a>}
+                    {typeof profile.linkedin === 'string' && profile.linkedin.trim() && <a href={profile.linkedin.startsWith('http') ? profile.linkedin : `https://${profile.linkedin}`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-[#0077b5]/10 hover:bg-[#0077b5]/20 text-[#0077b5] transition"><Linkedin className="w-5 h-5" /></a>}
+                    {typeof profile.leetcode === 'string' && profile.leetcode.trim() && <a href={profile.leetcode.startsWith('http') ? profile.leetcode : `https://${profile.leetcode}`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-[#FFA116]/10 hover:bg-[#FFA116]/20 text-[#FFA116] transition"><Code className="w-5 h-5" /></a>}
+                    {typeof profile.twitter === 'string' && profile.twitter.trim() && <a href={profile.twitter.startsWith('http') ? profile.twitter : `https://${profile.twitter}`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-[#1DA1F2]/10 hover:bg-[#1DA1F2]/20 text-[#1DA1F2] transition"><Twitter className="w-5 h-5" /></a>}
+                    {typeof profile.portfolio === 'string' && profile.portfolio.trim() && <a href={profile.portfolio.startsWith('http') ? profile.portfolio : `https://${profile.portfolio}`} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 text-[#7C3AED] transition"><Globe className="w-5 h-5" /></a>}
                   </div>
                 </div>
-                <div className="rounded-3xl border border-gray-100 bg-gray-50/80 p-4">
-                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Public URL</div>
-                  <div className="mt-3 break-all text-sm font-bold text-gray-900">{publicUrl}</div>
-                </div>
-              </div>
-            </div>
-          </section>
 
-          <aside className="rounded-[3rem] border border-gray-100 bg-white p-8 shadow-[0_20px_60px_rgba(15,23,42,0.04)]">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-xl font-black uppercase tracking-tight text-gray-900">Profile Actions</h2>
-                <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Share and copy this profile</p>
+                <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-[#7C3AED]/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-[#7C3AED]">
+                  <Sparkles className="h-3 w-3" /> {role}
+                </div>
+
+                <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                  {profile.location && <span className="inline-flex items-center gap-1"><MapPin className="h-4 w-4" /> {profile.location}</span>}
+                  {profile.domain && <span className="rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1 font-medium text-emerald-700">{profile.domain}</span>}
+                  {!isVisible && <span className="rounded-full border border-amber-100 bg-amber-50 px-3 py-1 font-medium text-amber-700">Visibility limited</span>}
+                </div>
+
               </div>
-              <Share2 className="h-5 w-5 text-[#7C3AED]" />
             </div>
-            <div className="mt-6 space-y-3">
-              <button onClick={copyLink} className="w-full rounded-2xl border border-gray-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-gray-900 transition hover:border-[#7C3AED]/30">
-                {copied ? 'Copied' : 'Copy Profile Link'}
+
+            <div className="flex flex-col gap-3 md:w-64 shrink-0">
+              <button onClick={copyLink} className="w-full flex items-center justify-center gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-gray-900 transition hover:border-[#7C3AED]/30">
+                <Copy className="h-4 w-4" /> {copied ? 'Copied' : 'Copy Link'}
               </button>
-              <button onClick={shareProfile} className="w-full rounded-2xl bg-[#7C3AED] px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-[#7C3AED]/20 transition hover:bg-[#6D28D9]">
-                Share Profile
+              <button onClick={shareProfile} className="w-full flex items-center justify-center gap-2 rounded-2xl bg-[#7C3AED] px-4 py-3 text-xs font-black uppercase tracking-[0.2em] text-white shadow-lg shadow-[#7C3AED]/20 transition hover:bg-[#6D28D9]">
+                <Share2 className="h-4 w-4" /> Share Profile
               </button>
             </div>
-            <div className="mt-6 rounded-3xl border border-[#7C3AED]/10 bg-[#F5F3FF]/70 p-5">
-              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#7C3AED]">Summary</div>
-              <p className="mt-3 text-sm leading-6 text-gray-700">A public contributor profile with project history, skill depth, and profile sharing baked in.</p>
-            </div>
-          </aside>
-        </div>
+          </div>
+        </section>
 
-        <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {stats.map(stat => (
-            <div key={stat.label} className="rounded-[2rem] border border-gray-100 bg-white p-5 shadow-sm hover:shadow-md transition-shadow">
-              <div className={`inline-flex items-center rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] ${stat.tone === 'emerald' ? 'bg-emerald-50 text-emerald-700' : stat.tone === 'violet' ? 'bg-[#F5F3FF] text-[#7C3AED]' : stat.tone === 'sky' ? 'bg-sky-50 text-sky-700' : 'bg-amber-50 text-amber-700'}`}>
-                {stat.label}
-              </div>
-              <div className="mt-4 text-3xl font-black text-gray-900">{stat.value}</div>
-              <p className="mt-2 text-xs leading-5 text-gray-500">Public metric derived from profile content.</p>
+        {/* Describe Yourself Section */}
+        <section className="mb-8 rounded-[2rem] border border-gray-100 bg-white p-8 shadow-sm hover:shadow-md transition-all">
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50">
+            <div className="bg-[#7C3AED]/10 p-2 rounded-xl text-[#7C3AED]">
+              <User className="w-5 h-5" />
             </div>
-          ))}
-        </div>
+            <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">Describe yourself</h3>
+          </div>
+          <div className="space-y-6">
+            <div>
+              <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2">Bio</h4>
+              <p className="text-sm leading-relaxed text-gray-700">{headline || <span className="text-gray-400 italic">No bio provided</span>}</p>
+            </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-          <section className="rounded-[3rem] border border-gray-100 bg-white p-8 shadow-[0_20px_60px_rgba(15,23,42,0.04)]">
-            <div className="flex items-center justify-between gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4 border-t border-gray-50">
               <div>
-                <h2 className="text-xl font-black uppercase tracking-tight text-gray-900">Activity Timeline</h2>
-                <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Visible milestones on the public surface</p>
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2">Username</h4>
+                <p className="text-sm font-bold text-gray-900">@{profile.username || profile.login || 'User'}</p>
               </div>
-              <Calendar className="h-5 w-5 text-gray-300" />
-            </div>
-            <div className="mt-6 space-y-4">
-              {timeline.map((entry, index) => (
-                <div key={entry.title} className="flex gap-4 rounded-3xl border border-gray-100 bg-gray-50/60 p-4">
-                  <div className="mt-2 h-3 w-3 shrink-0 rounded-full bg-[#7C3AED]" />
-                  <div>
-                    <div className="text-sm font-black text-gray-900">{entry.title}</div>
-                    <div className="text-sm leading-6 text-gray-600">{entry.detail}</div>
-                    <div className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">0{index + 1}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
 
-          <section className="rounded-[3rem] border border-gray-100 bg-white p-8 shadow-[0_20px_60px_rgba(15,23,42,0.04)]">
-            <div className="flex items-center justify-between gap-4">
               <div>
-                <h2 className="text-xl font-black uppercase tracking-tight text-gray-900">Highlights</h2>
-                <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400">Badges and recent work</p>
-              </div>
-              <Award className="h-5 w-5 text-[#7C3AED]" />
-            </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {[
-                { label: 'Skills', value: skills.length },
-                { label: 'Projects', value: projects.length },
-                { label: 'Experience', value: experience.length },
-                { label: 'Certifications', value: certifications.length },
-              ].map(item => (
-                <div key={item.label} className="rounded-3xl border border-gray-100 bg-[#FAFAFA] p-4">
-                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">{item.label}</div>
-                  <div className="mt-2 text-2xl font-black text-gray-900">{item.value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {[
-                { label: 'Profile Builder', value: `${projects.length + experience.length} records` },
-                { label: 'Recognition', value: `${achievements.length} achievements` },
-                { label: 'Resume Ready', value: profile?.resume?.fileName !== 'No resume uploaded' ? 'Active' : 'Pending' },
-                { label: 'Visibility', value: isVisible ? 'Public' : 'Limited' },
-              ].map(badge => (
-                <div key={badge.label} className="rounded-3xl border border-[#7C3AED]/10 bg-[#F5F3FF]/70 p-4">
-                  <div className="text-[10px] font-black uppercase tracking-[0.2em] text-[#7C3AED]">{badge.label}</div>
-                  <div className="mt-2 text-sm font-bold text-gray-900">{badge.value}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-6 rounded-3xl border border-gray-100 bg-gray-50/70 p-5">
-              <div className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400">Featured Skills</div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {skills.slice(0, 8).map((skill: any) => (
-                  <span key={skill.name || skill} className="rounded-full border border-gray-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-gray-700">
-                    {skill.name || skill}
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2">One Strong Word</h4>
+                {profile.oneStrongWord ? (
+                  <span className="inline-flex items-center gap-1.5 rounded-full bg-[#1D4ED8]/10 px-3 py-1.5 text-xs font-black uppercase tracking-[0.18em] text-[#1D4ED8]">
+                    <Sparkles className="h-3 w-3" /> {profile.oneStrongWord}
                   </span>
-                ))}
-                {skills.length === 0 && <span className="text-sm text-gray-400">No public skills listed yet.</span>}
+                ) : (
+                  <span className="text-xs text-gray-400 italic">None</span>
+                )}
+              </div>
+
+              <div>
+                <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-2">Career Goal</h4>
+                <p className="text-sm font-bold text-gray-900">{profile.careerGoal || <span className="text-gray-400 italic font-normal">Not specified</span>}</p>
               </div>
             </div>
-          </section>
+          </div>
+        </section>
+
+        {/* Detailed Sections */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+          {/* Left Column */}
+          <div className="space-y-8 lg:col-span-1">
+
+            {/* Resume Section */}
+            <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-all">
+              <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-50">
+                <div className="bg-[#7C3AED]/10 p-2 rounded-xl text-[#7C3AED]">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">Resume</h3>
+              </div>
+              <div>
+                {resume?.fileName && resume.fileName !== 'No resume uploaded' ? (
+                  <div>
+                    <p className="text-sm font-bold text-gray-900 break-words" title={resume.fileName}>{resume.fileName}</p>
+                    {resume.atsScore > 0 && <p className="text-xs text-gray-500 mt-1">ATS Score: {resume.atsScore}%</p>}
+                    <div className="flex items-center gap-3 mt-5">
+                      <a
+                        href={resume.filePath ? `${API_BASE_URL}${resume.filePath}` : '#'}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-black uppercase tracking-wider rounded-xl transition border border-gray-200"
+                      >
+                        <Eye className="w-4 h-4" /> See
+                      </a>
+                      <a
+                        href={resume.filePath ? `${API_BASE_URL}${resume.filePath}` : '#'}
+                        download
+                        className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-[#7C3AED] hover:bg-[#6D28D9] text-white text-xs font-black uppercase tracking-wider rounded-xl transition shadow-md shadow-[#7C3AED]/20"
+                      >
+                        <Download className="w-4 h-4" /> Download
+                      </a>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                    <p className="text-xs text-gray-400 font-medium">No resume available</p>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Experience Section */}
+            <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-all">
+              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50">
+                <div className="bg-emerald-100 p-2 rounded-xl text-emerald-600">
+                  <Briefcase className="w-5 h-5" />
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">Experience</h3>
+              </div>
+              <div className="space-y-5">
+                {experience.length > 0 ? (
+                  experience.map((exp: any, idx: number) => (
+                    <div key={idx} className="bg-emerald-50/30 p-5 rounded-2xl border border-emerald-50">
+                      <h4 className="text-base font-black text-gray-900">{exp.role || exp.title}</h4>
+                      <p className="text-sm font-bold text-emerald-700 mt-1">{exp.company}</p>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {exp.type && <span className="text-[10px] font-black uppercase tracking-wider bg-white px-2 py-1 rounded-md text-emerald-600 border border-emerald-100">{exp.type}</span>}
+                        {exp.location && <span className="text-[10px] font-bold text-gray-500 bg-white px-2 py-1 rounded-md border border-gray-100">{exp.location}</span>}
+                      </div>
+                      {(exp.startDate || exp.endDate) && (
+                        <p className="text-xs text-gray-500 mt-2 font-medium">
+                          {exp.startDate} {exp.endDate ? `- ${exp.endDate}` : '- Present'}
+                        </p>
+                      )}
+                      {exp.description && (
+                        <p className="text-sm text-gray-600 mt-3 leading-relaxed">{exp.description}</p>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No experience listed</p>
+                )}
+              </div>
+            </section>
+
+            {/* Skills Section */}
+            <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-all">
+              <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="bg-rose-100 p-2 rounded-xl text-rose-600">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">Skills</h3>
+                </div>
+                <span className="bg-rose-50 text-rose-700 py-1 px-3 rounded-full text-[10px] font-black">{skills.length}</span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {skills.length > 0 ? (
+                  skills.map((skill: any, idx: number) => (
+                    <span key={idx} className="bg-white border border-gray-200 text-gray-700 px-3.5 py-1.5 rounded-xl text-xs font-bold shadow-sm">
+                      {skill.name || String(skill)}
+                    </span>
+                  ))
+                ) : (
+                  <p className="text-xs text-gray-400 italic w-full">No skills added</p>
+                )}
+              </div>
+            </section>
+
+          </div>
+
+          {/* Right Column */}
+          <div className="space-y-8 lg:col-span-2">
+
+            {/* Education Section */}
+            <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-all">
+              <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-50">
+                <div className="bg-sky-100 p-2 rounded-xl text-sky-600">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">Education</h3>
+              </div>
+              <div className="space-y-4">
+                {education.length > 0 ? (
+                  education.map((edu: any, idx: number) => (
+                    <div key={idx} className="bg-sky-50/40 p-5 rounded-2xl border border-sky-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h4 className="text-base font-black text-gray-900">{edu.institution}</h4>
+                        <p className="text-sm font-bold text-sky-700 mt-1">{edu.degree}</p>
+                      </div>
+                      {(edu.startYear || edu.endYear) && (
+                        <div className="shrink-0 bg-white px-3 py-1.5 rounded-lg border border-sky-100 text-xs font-black text-sky-600 uppercase tracking-widest">
+                          {edu.startYear} - {edu.endYear || 'Present'}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No education details</p>
+                )}
+              </div>
+            </section>
+
+            {/* Projects Section */}
+            <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-all">
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-50">
+                <div className="flex items-center gap-3">
+                  <div className="bg-amber-100 p-2 rounded-xl text-amber-600">
+                    <Code className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">Projects</h3>
+                </div>
+                <span className="bg-amber-50 text-amber-700 py-1 px-3 rounded-full text-[10px] font-black">{projects.length}</span>
+              </div>
+              <div className="grid grid-cols-1 gap-4">
+                {projects.length > 0 ? (
+                  projects.map((proj: any, idx: number) => (
+                    <div key={idx} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-start justify-between gap-4 hover:border-amber-200 transition">
+                      <div className="flex-1">
+                        <h4 className="text-base font-black text-gray-900 mb-2">{proj.title || proj.name}</h4>
+                        <p className="text-sm text-gray-600 leading-relaxed">{proj.description}</p>
+                      </div>
+                      {proj.link && (
+                        <div className="shrink-0">
+                          <a href={proj.link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-4 py-2 bg-amber-50 border border-amber-100 rounded-xl text-xs font-black uppercase tracking-wider text-amber-600 hover:text-amber-700 hover:bg-amber-100 transition-colors">
+                            <LinkIcon className="w-4 h-4" /> View Link
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-gray-400 italic">No projects added</p>
+                )}
+              </div>
+            </section>
+
+            {/* Two columns for Certs & Accomplishments */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+
+              {/* Certificates Section */}
+              <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-all">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-50">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-cyan-100 p-2 rounded-xl text-cyan-600">
+                      <ShieldCheck className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">Certificates</h3>
+                  </div>
+                  <span className="bg-cyan-50 text-cyan-700 py-1 px-3 rounded-full text-[10px] font-black">{certifications.length}</span>
+                </div>
+                <div className="space-y-4">
+                  {certifications.length > 0 ? (
+                    certifications.map((cert: any, idx: number) => (
+                      <div key={idx} className="flex gap-4 items-start bg-white p-4 rounded-2xl border border-gray-50 hover:border-cyan-100 transition shadow-sm">
+                        <div className="bg-cyan-50 p-3 rounded-xl shrink-0 border border-cyan-100/50">
+                          <Award className="w-5 h-5 text-cyan-500" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-black text-gray-900">{cert.title || cert.name}</h4>
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            <span className="text-xs font-bold text-cyan-700">{cert.issuer || cert.organization}</span>
+                            {cert.date && <span className="text-[10px] bg-gray-50 px-2 py-0.5 rounded text-gray-500 font-bold">{cert.date}</span>}
+                          </div>
+                          {cert.credentialId && <p className="text-[10px] text-gray-400 mt-2 font-mono">ID: {cert.credentialId}</p>}
+                          {cert.link && (
+                            <a href={cert.link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-cyan-600 hover:text-cyan-700 bg-cyan-50/50 hover:bg-cyan-50 px-3 py-1.5 rounded-lg transition">
+                              <LinkIcon className="w-3 h-3" /> View Credential
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">No certificates uploaded</p>
+                  )}
+                </div>
+              </section>
+
+              {/* Accomplishments Section */}
+              <section className="rounded-[2rem] border border-gray-100 bg-white p-6 shadow-sm hover:shadow-md transition-all">
+                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-50">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-violet-100 p-2 rounded-xl text-violet-600">
+                      <Star className="w-5 h-5" />
+                    </div>
+                    <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">Accomplishments</h3>
+                  </div>
+                  <span className="bg-violet-50 text-violet-700 py-1 px-3 rounded-full text-[10px] font-black">{achievements.length}</span>
+                </div>
+                <div className="space-y-4">
+                  {achievements.length > 0 ? (
+                    achievements.map((ach: any, idx: number) => (
+                      <div key={idx} className="flex gap-4 items-start bg-white p-4 rounded-2xl border border-gray-50 hover:border-violet-100 transition shadow-sm">
+                        <div className="bg-violet-50 p-3 rounded-xl shrink-0 border border-violet-100/50">
+                          <Star className="w-5 h-5 text-violet-500" />
+                        </div>
+                        <div className="flex-1">
+                          <h4 className="text-sm font-black text-gray-900">{ach.title || ach.name}</h4>
+
+                          <div className="flex flex-wrap items-center gap-2 mt-1">
+                            {ach.organization && <span className="text-xs font-bold text-violet-700">{ach.organization}</span>}
+                            {ach.category && <span className="text-[10px] bg-gray-50 px-2 py-0.5 rounded text-gray-500 font-bold">{ach.category}</span>}
+                            {(ach.month || ach.year || ach.date) && (
+                              <span className="text-[10px] text-gray-400 font-bold">
+                                {[ach.month, ach.year || ach.date].filter(Boolean).join(' ')}
+                              </span>
+                            )}
+                          </div>
+
+                          {ach.description && <p className="text-xs text-gray-600 mt-2 leading-relaxed">{ach.description}</p>}
+
+                          {ach.link && (
+                            <a href={ach.link} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-violet-600 hover:text-violet-700 bg-violet-50/50 hover:bg-violet-50 px-3 py-1.5 rounded-lg transition">
+                              <LinkIcon className="w-3 h-3" /> View Detail
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">No accomplishments to show</p>
+                  )}
+                </div>
+              </section>
+
+            </div>
+
+          </div>
+
         </div>
       </div>
     </div>
@@ -289,4 +476,3 @@ const PublicProfile: React.FC = () => {
 };
 
 export default PublicProfile;
-

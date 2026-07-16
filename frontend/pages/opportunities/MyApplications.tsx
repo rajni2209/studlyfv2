@@ -69,7 +69,12 @@ const MyApplications: React.FC = () => {
 
     const statusLabel = (s: string | undefined) => {
         const x = (s || 'pending').toLowerCase();
-        if (x === 'accepted' || x === 'shortlisted') return { text: 'Shortlisted', cls: 'bg-emerald-50 text-emerald-800 border-emerald-100' };
+        if (x === 'accepted' || x === 'shortlisted' || x === 'approved' || x === 'verified') {
+            return { 
+                text: x === 'shortlisted' ? 'Shortlisted' : x.charAt(0).toUpperCase() + x.slice(1), 
+                cls: 'bg-emerald-50 text-emerald-800 border-emerald-100' 
+            };
+        }
         if (x === 'rejected') return { text: 'Not selected', cls: 'bg-red-50 text-red-800 border-red-100' };
         return { text: 'Pending review', cls: 'bg-slate-100 text-slate-700 border-slate-200' };
     };

@@ -279,6 +279,12 @@ class DatabaseManager:
             await self.db.announcements.create_index([("event_id", 1), ("created_at", -1)])
             await self.db.announcement_audit.create_index([("announcement_id", 1), ("recipient", 1)])
 
+            # ── Blocked Entities (Candidates & Orgs) ──
+            await self.db.blocked_entities.create_index(
+                [("institution_id", 1), ("entity_type", 1), ("identifier", 1)],
+                unique=True
+            )
+
             # ── Opportunity Reviews (Performance) ──
             await self.db.opportunity_reviews.create_index("opportunity_id")
             await self.db.opportunity_reviews.create_index([("opportunity_id", 1), ("created_at", -1)])
@@ -429,6 +435,9 @@ avatars_col = db["avatars"]
 
 # Certificate Management
 cert_templates_col = db["cert_templates"]
+
+# Moderation & Security
+blocked_entities_col = db["blocked_entities"]
 
 # ─── GRIDFS BUCKET (persistent file storage, survives Render restarts) ────────
 # Usage: await gridfs_bucket.upload_from_stream(filename, data) → ObjectId

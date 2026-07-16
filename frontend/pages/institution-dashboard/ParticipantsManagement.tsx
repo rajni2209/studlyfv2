@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { API_BASE_URL, authHeaders } from '../../apiConfig';
 
 interface Participant {
@@ -54,7 +55,7 @@ const ParticipantsManagement: React.FC<{ institutionId?: string }> = ({ institut
                     event_id: p.event_id,
                     team: p.team_name || 'Individual',
                     regDate: p.registered_at ? new Date(p.registered_at).toLocaleDateString() : 'N/A',
-                    status: p.status || 'pending',
+                    status: p.registration_status || p.status || 'pending',
                     current_stage: p.current_stage || null,
                     user_id: p.user_id,
                 })));
@@ -82,12 +83,13 @@ const ParticipantsManagement: React.FC<{ institutionId?: string }> = ({ institut
             const res = await fetch(`${API_BASE_URL}/api/participants/${p.id}/status`, {
                 method: 'PATCH',
                 headers: { ...headers, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'shortlisted' }),
+                body: JSON.stringify({ status: 'approved' }),
             });
             if (res.ok) {
-                setParticipants(prev => prev.map(x => x.id === p.id ? { ...x, status: 'shortlisted' } : x));
+                setParticipants(prev => prev.map(x => x.id === p.id ? { ...x, status: 'approved' } : x));
             } else {
-                setError('Failed to approve participant');
+                const errData = await res.json().catch(() => ({}));
+                setError(`Failed to approve participant: ${errData.detail || res.statusText || 'Unknown Error'}`);
             }
         } catch {
             setError('Network error approving participant');
@@ -104,7 +106,8 @@ const ParticipantsManagement: React.FC<{ institutionId?: string }> = ({ institut
             if (res.ok) {
                 setParticipants(prev => prev.map(x => x.id === p.id ? { ...x, status: 'rejected' } : x));
             } else {
-                setError('Failed to reject participant');
+                const errData = await res.json().catch(() => ({}));
+                setError(`Failed to reject participant: ${errData.detail || res.statusText || 'Unknown Error'}`);
             }
         } catch {
             setError('Network error rejecting participant');
@@ -152,7 +155,7 @@ const ParticipantsManagement: React.FC<{ institutionId?: string }> = ({ institut
     };
 
     const statusActions = (p: Participant) => {
-        if (p.status === 'shortlisted' || p.status === 'verified') return null;
+        if (p.status === 'approved' || p.status === 'shortlisted' || p.status === 'verified') return null;
         if (p.status === 'rejected') return null;
         return (
             <div className="flex gap-2">
@@ -186,6 +189,7 @@ const ParticipantsManagement: React.FC<{ institutionId?: string }> = ({ institut
 
     const getStatusBadgeClass = (status: string) => {
         switch (status) {
+            case 'approved':
             case 'shortlisted':
             case 'verified':
                 return 'bg-green-100 text-green-800 border border-green-200';
@@ -258,6 +262,7 @@ const ParticipantsManagement: React.FC<{ institutionId?: string }> = ({ institut
                             </select>
                             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="px-4 py-2 border rounded-lg bg-white">
                                 <option value="All Statuses">All Statuses</option>
+                                <option value="approved">Approved</option>
                                 <option value="shortlisted">Shortlisted</option>
                                 <option value="rejected">Rejected</option>
                                 <option value="pending">Pending</option>
@@ -288,7 +293,13 @@ const ParticipantsManagement: React.FC<{ institutionId?: string }> = ({ institut
                                         {filteredParticipants.map(p => (
                                             <tr key={p.id} className="hover:bg-gray-50 transition-all">
                                                 <td className="px-6 py-4">
-                                                    <p className="font-bold text-gray-900">{p.name}</p>
+                                                    {p.user_id ? (
+                                                        <Link to={`/profile/${p.user_id}`} className="font-bold text-indigo-600 hover:text-indigo-800 hover:underline">
+                                                            {p.name}
+                                                        </Link>
+                                                    ) : (
+                                                        <p className="font-bold text-gray-900">{p.name}</p>
+                                                    )}
                                                     <p className="text-[10px] text-gray-400">{p.regDate}</p>
                                                 </td>
                                                 <td className="px-6 py-4 text-sm text-gray-600">{p.email}</td>

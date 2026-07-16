@@ -957,6 +957,21 @@ async def submit_event_registration(event_id: str, request: ApplyRegistrationReq
         if not event:
             raise HTTPException(status_code=404, detail="Event not found")
             
+        # Check if candidate is blocked by this institution
+        inst_id = event.get("institution_id")
+        user_email = user.get("email") or user.get("sub")
+        if inst_id and user_email:
+            blocked = await db.blocked_entities.find_one({
+                "institution_id": inst_id,
+                "entity_type": "candidate",
+                "identifier": user_email.strip().lower()
+            })
+            if blocked:
+                raise HTTPException(
+                    status_code=403,
+                    detail="You have been restricted from registering for events hosted by this institution."
+                )
+            
         settings = event.get("registration_settings") or {}
         profile_fields_config = normalize_profile_fields_config(settings.get("profile_fields_config") or {})
 

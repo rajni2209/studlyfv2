@@ -9,7 +9,8 @@ import {
   User, FileText, Book, Award, Briefcase, 
   Terminal, Share2, Settings, ShieldCheck, 
   ChevronLeft, Plus, Save, Sparkles, Scan,
-  Globe, MapPin, Calendar, Heart, GraduationCap, Download, Copy
+  Globe, MapPin, Calendar, Heart, GraduationCap, Download, Copy, Eye,
+  Github, Linkedin, Code
 } from 'lucide-react';
 import AvatarImage from '../components/AvatarImage';
 
@@ -125,8 +126,9 @@ const MyProfile: React.FC = () => {
           const data = await res.json();
           setFormData(prev => ({
             ...prev,
-            firstName: data.full_name ? data.full_name.split(' ')[0] : prev.firstName,
-            lastName: data.full_name ? data.full_name.split(' ').slice(1).join(' ') : prev.lastName,
+            firstName: data.firstName || (data.full_name ? data.full_name.split(' ')[0] : prev.firstName),
+            lastName: data.lastName || (data.full_name ? data.full_name.split(' ').slice(1).join(' ') : prev.lastName),
+            username: data.username || prev.username,
             phone: data.phone || prev.phone,
             gender: data.gender || prev.gender,
             dob: data.dob || prev.dob,
@@ -142,6 +144,7 @@ const MyProfile: React.FC = () => {
             education: data.education || prev.education,
             educationList: data.educationList || prev.educationList,
             experience: data.experience || prev.experience,
+            experienceList: data.experienceList || prev.experienceList,
             projects: data.projects || prev.projects,
             certifications: data.certifications || prev.certifications,
             achievements: data.achievements || prev.achievements,
@@ -157,6 +160,8 @@ const MyProfile: React.FC = () => {
             newsletter: data.newsletter ?? prev.newsletter,
             isCurrentStudent: data.isCurrentStudent ?? prev.isCurrentStudent,
             isCurrentEmployee: data.isCurrentEmployee ?? prev.isCurrentEmployee,
+            oneStrongWord: data.oneStrongWord || prev.oneStrongWord,
+            githubUsername: data.githubUsername || prev.githubUsername,
           }));
         } else {
           const names = user.full_name?.split(' ') || [];
@@ -183,24 +188,25 @@ const MyProfile: React.FC = () => {
   }, [user]);
 
   // ─── REAL: Save full profile to backend ───
-  const handleSave = async (section: string) => {
+  const handleSave = async (section: string, customFormData?: typeof formData) => {
     if (!user?.user_id) return;
     setIsSaving(true);
     setSaveStatus(null);
 
+    const dataToSave = customFormData || formData;
     try {
       const res = await fetch(`${API_BASE_URL}/api/user/${user.user_id}/update-profile`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...formData,
+          ...dataToSave,
           // Ensure arrays and objects are clean
-          skills: formData.skills || [],
-          projects: formData.projects || [],
-          certifications: formData.certifications || [],
-          achievements: formData.achievements || [],
-          interests: formData.interests || [],
-          educationList: formData.educationList || [],
+          skills: dataToSave.skills || [],
+          projects: dataToSave.projects || [],
+          certifications: dataToSave.certifications || [],
+          achievements: dataToSave.achievements || [],
+          interests: dataToSave.interests || [],
+          educationList: dataToSave.educationList || [],
         })
       });
 
@@ -235,6 +241,16 @@ const MyProfile: React.FC = () => {
 
   // ─── REAL: Delete item from backend + local state ───
   const handleDeleteItem = async (section: string, index: number, stateKey: keyof typeof formData) => {
+    // 1. Optimistically delete item from local state list
+    setFormData(prev => {
+      const list = prev[stateKey];
+      if (Array.isArray(list)) {
+        const updatedList = list.filter((_, i) => i !== index);
+        return { ...prev, [stateKey]: updatedList };
+      }
+      return prev;
+    });
+
     if (!user?.user_id) return;
     try {
       const res = await fetch(
@@ -243,14 +259,14 @@ const MyProfile: React.FC = () => {
       );
       if (res.ok) {
         const updated = await res.json();
-        setFormData(prev => ({ ...prev, [stateKey]: updated[stateKey as string] || [] }));
+        if (updated && updated[stateKey as string]) {
+          setFormData(prev => ({ ...prev, [stateKey]: updated[stateKey as string] }));
+        }
         setSaveStatus({ type: 'success', message: 'Deleted successfully!' });
         setTimeout(() => setSaveStatus(null), 2000);
       }
     } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-        setSaveStatus({ type: 'error', message: 'Delete failed: ' + errorMessage });
-      setTimeout(() => setSaveStatus(null), 3000);
+      console.warn("Delete request failed (this is expected for unsaved local items):", err);
     }
   };
 
@@ -275,20 +291,71 @@ const MyProfile: React.FC = () => {
     setIsUploading(true);
     try {
       const form = new FormData();
-      form.append('resume', file);
+      form.append('file', file);
       const res = await fetch(`${API_BASE_URL}/api/user/${user?.user_id}/upload-resume`, {
         method: 'POST',
         body: form,
       });
       if (res.ok) {
         const data = await res.json();
-        setFormData(prev => ({ ...prev, resume: { fileName: file.name, uploadDate: new Date().toISOString(), atsScore: data.atsScore || 0, version: '1.0' } }));
-        if (data.skills) setFormData(prev => ({ ...prev, skills: data.skills }));
+        if (data.resume) {
+          setFormData(prev => ({ ...prev, resume: data.resume }));
+        } else {
+          setFormData(prev => ({ ...prev, resume: { fileName: file.name, uploadDate: new Date().toISOString(), atsScore: data.ats_score || data.atsScore || 0, version: '1.0', filePath: '' } }));
+        }
+        if (data.skills) {
+          const formattedSkills = data.skills.map((s: string | any) => {
+            if (typeof s === 'string') {
+              return { name: s, proficiency: 'Intermediate', years: '1' };
+            }
+            return {
+              name: s.name || '',
+              proficiency: s.proficiency || 'Intermediate',
+              years: s.years || '1'
+            };
+          });
+          setFormData(prev => ({ ...prev, skills: formattedSkills }));
+        }
         if (data.extractedSkills) setExtractedSkills(data.extractedSkills);
         setResumeParseResult(data);
       }
     } catch { /* ignore */ }
     setIsUploading(false);
+  };
+
+  const handleViewResume = () => {
+    if (!formData.resume.filePath) return;
+    const resumeUrl = formData.resume.filePath.startsWith('http')
+      ? formData.resume.filePath
+      : `${API_BASE_URL}${formData.resume.filePath}`;
+    window.open(resumeUrl, '_blank');
+  };
+
+  const handleDownloadResume = async () => {
+    if (!formData.resume.filePath) return;
+    const resumeUrl = formData.resume.filePath.startsWith('http')
+      ? formData.resume.filePath
+      : `${API_BASE_URL}${formData.resume.filePath}`;
+    try {
+      const response = await fetch(resumeUrl);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.setAttribute('download', formData.resume.fileName || 'resume.pdf');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch {
+      const link = document.createElement('a');
+      link.href = resumeUrl;
+      link.setAttribute('download', formData.resume.fileName || 'resume.pdf');
+      link.target = '_blank';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const removeInterest = (tag: string) => {
@@ -323,11 +390,14 @@ const MyProfile: React.FC = () => {
 
   const handleStrongWordInputBlur = () => {
     setIsEditingStrongWord(false);
+    handleSave('One strong word');
   };
 
   const chooseStrongWord = (word: string) => {
-    setFormData(prev => ({ ...prev, oneStrongWord: word }));
+    const updated = { ...formData, oneStrongWord: word };
+    setFormData(updated);
     setIsEditingStrongWord(false);
+    handleSave('One strong word', updated);
   };
 
   const calculateStrength = () => {
@@ -450,7 +520,7 @@ const MyProfile: React.FC = () => {
   };
   const APP_BASE_URL = (import.meta as any).env?.VITE_PUBLIC_URL || window.location.origin;
 const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
-  ? `${APP_BASE_URL}/profile/${user.user_id}`
+  ? `${APP_BASE_URL}/#/profile/${user.user_id}`
   : '';
 
   const profileShareCaption = `${profileDisplayName} | Studlyf\n${profileRole}\n${profileHeadline}`;
@@ -1375,10 +1445,18 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
         document.body.removeChild(textArea);
       }
       setCopyFeedback({ target, type: 'success', message: 'Profile link copied to clipboard.' });
-      setTimeout(() => setCopyFeedback(current => current?.target === target ? null : current), 2500);
+      setSaveStatus({ type: 'success', message: 'Profile link copied to clipboard!' });
+      setTimeout(() => {
+        setCopyFeedback(current => current?.target === target ? null : current);
+        setSaveStatus(null);
+      }, 2500);
     } catch {
       setCopyFeedback({ target, type: 'error', message: 'Unable to copy the profile link.' });
-      setTimeout(() => setCopyFeedback(current => current?.target === target ? null : current), 2500);
+      setSaveStatus({ type: 'error', message: 'Unable to copy the profile link.' });
+      setTimeout(() => {
+        setCopyFeedback(current => current?.target === target ? null : current);
+        setSaveStatus(null);
+      }, 2500);
     }
   };
 
@@ -1879,7 +1957,7 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                 <div key={`edu-${i}`} className="bg-white border border-gray-100 rounded-[2.5rem] p-8 relative group hover:border-[#7C3AED]/30 transition-all shadow-sm">
                   <button
                     onClick={() => handleDeleteItem('education', i, 'educationList')}
-                    className="absolute top-6 right-6 p-2 text-gray-200 hover:text-red-400 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                    className="absolute top-3 right-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 z-20"
                   >
                     <Plus className="w-5 h-5 rotate-45" />
                   </button>
@@ -1931,9 +2009,6 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                     {isSaving ? 'Saving...' : 'Save Education'}
                   </button>
                 </div>
-                {sectionStatus?.section === 'Education' && (
-                  <div className={`text-[10px] font-bold ${sectionStatus.type === 'success' ? 'text-emerald-600' : 'text-red-500'}`}>{sectionStatus.message}</div>
-                )}
               </div>
             )}
           </motion.div>
@@ -2229,14 +2304,36 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-3">
                   <button
                     onClick={() => resumeInputRef.current?.click()}
                     disabled={isUploading}
-                    className="flex-1 py-3 border-2 border-dashed border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-all disabled:opacity-50"
+                    className="flex-1 min-w-[140px] py-3 border-2 border-dashed border-gray-200 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:border-[#7C3AED] hover:text-[#7C3AED] transition-all disabled:opacity-50"
                   >
-                    {isUploading ? 'Parsing...' : 'Re-upload Resume'}
+                    {isUploading ? 'Parsing...' : (formData.resume.fileName !== 'No resume uploaded' ? 'Re-upload Resume' : 'Upload Resume')}
                   </button>
+
+                  {formData.resume.filePath && formData.resume.fileName !== 'No resume uploaded' && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleViewResume}
+                        className="px-5 py-3 bg-gray-50 border border-gray-200 text-gray-700 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-100 transition-all flex items-center gap-2"
+                      >
+                        <Eye className="w-4 h-4" />
+                        View
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleDownloadResume}
+                        className="px-5 py-3 bg-gray-50 border border-gray-200 text-gray-700 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-gray-100 transition-all flex items-center gap-2"
+                      >
+                        <Download className="w-4 h-4" />
+                        Download
+                      </button>
+                    </>
+                  )}
+
                   <button
                     onClick={() => handleSave('Resume')}
                     disabled={isSaving || formData.resume.atsScore === 0}
@@ -2343,7 +2440,7 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                 <div key={`exp-${i}`} className="bg-white border border-gray-100 rounded-[2.5rem] p-8 relative group hover:border-[#7C3AED]/30 transition-all shadow-sm">
                   <button
                     onClick={() => handleDeleteItem('experience', i, 'experienceList')}
-                    className="absolute top-6 right-6 p-2 text-gray-200 hover:text-red-400 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                    className="absolute top-3 right-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 z-20"
                   >
                     <Plus className="w-5 h-5 rotate-45" />
                   </button>
@@ -2432,7 +2529,7 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                 <div key={`proj-${i}`} className="bg-white border border-gray-100 rounded-[2.5rem] p-8 relative group hover:border-[#7C3AED]/30 transition-all shadow-sm">
                   <button
                     onClick={() => handleDeleteItem('project', i, 'projects')}
-                    className="absolute top-6 right-6 p-2 text-gray-200 hover:text-red-400 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                    className="absolute top-3 right-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 z-20"
                   >
                     <Plus className="w-5 h-5 rotate-45" />
                   </button>
@@ -2452,16 +2549,24 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                       />
                     </div>
                     <div className="md:col-span-2 space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Description</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Description</label>
+                        <span className={`text-[10px] font-bold ${proj.description?.split(/\s+/).filter(Boolean).length > 300 ? 'text-red-500' : 'text-gray-400'}`}>
+                          {proj.description?.split(/\s+/).filter(Boolean).length || 0} / 300 words
+                        </span>
+                      </div>
                       <textarea
                         value={proj.description}
                         onChange={e => {
-                          const updated = [...formData.projects];
-                          updated[i] = { ...updated[i], description: e.target.value };
-                          setFormData(prev => ({ ...prev, projects: updated }));
+                          const words = e.target.value.split(/\s+/).filter(Boolean);
+                          if (words.length <= 300 || e.target.value.length < proj.description.length) {
+                            const updated = [...formData.projects];
+                            updated[i] = { ...updated[i], description: e.target.value };
+                            setFormData(prev => ({ ...prev, projects: updated }));
+                          }
                         }}
                         className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl text-sm font-bold min-h-[100px] text-gray-900 focus:bg-white outline-none transition-all"
-                        placeholder="Describe your project..."
+                        placeholder="Describe your project (max 300 words)..."
                       />
                     </div>
                     <div className="space-y-2">
@@ -2540,16 +2645,16 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                 <div key={`cert-${i}`} className="bg-white border border-gray-100 rounded-[2.5rem] p-8 group hover:border-[#7C3AED]/30 transition-all shadow-sm relative">
                   <button
                     onClick={() => handleDeleteItem('certification', i, 'certifications')}
-                    className="absolute top-5 right-5 p-2 text-gray-200 hover:text-red-400 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                    className="absolute top-3 right-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 z-20"
                   >
                     <Plus className="w-4 h-4 rotate-45" />
                   </button>
                   <div className="space-y-4">
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Certificate Name</label>
-                      <input type="text" value={cert.name} onChange={e => { const u = [...formData.certifications]; u[i] = { ...u[i], name: e.target.value }; setFormData(prev => ({ ...prev, certifications: u })); }} className="w-full px-6 py-3 bg-gray-50 border border-transparent rounded-2xl text-sm font-bold text-gray-900 focus:bg-white outline-none transition-all" placeholder="AWS Certified Solutions Architect" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Certificate Name</label>
+                        <input type="text" value={cert.name} onChange={e => { const u = [...formData.certifications]; u[i] = { ...u[i], name: e.target.value }; setFormData(prev => ({ ...prev, certifications: u })); }} className="w-full px-6 py-3 bg-gray-50 border border-transparent rounded-2xl text-sm font-bold text-gray-900 focus:bg-white outline-none transition-all" placeholder="AWS Certified Solutions Architect" />
+                      </div>
                       <div className="space-y-2">
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Issuer</label>
                         <input type="text" value={cert.issuer} onChange={e => { const u = [...formData.certifications]; u[i] = { ...u[i], issuer: e.target.value }; setFormData(prev => ({ ...prev, certifications: u })); }} className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl text-xs font-bold text-gray-900 focus:bg-white outline-none transition-all" placeholder="Google Cloud" />
@@ -2558,10 +2663,14 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Date</label>
                         <input type="text" value={cert.date} onChange={e => { const u = [...formData.certifications]; u[i] = { ...u[i], date: e.target.value }; setFormData(prev => ({ ...prev, certifications: u })); }} className="w-full px-4 py-3 bg-gray-50 border border-transparent rounded-xl text-xs font-bold text-gray-900 focus:bg-white outline-none transition-all" placeholder="2024" />
                       </div>
-                    </div>
-                    <div className="space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Credential URL</label>
-                      <input type="url" value={cert.link} onChange={e => { const u = [...formData.certifications]; u[i] = { ...u[i], link: e.target.value }; setFormData(prev => ({ ...prev, certifications: u })); }} className="w-full px-6 py-3 bg-gray-50 border border-transparent rounded-2xl text-sm font-bold text-gray-900 focus:bg-white outline-none transition-all" placeholder="https://..." />
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Credential ID (Optional)</label>
+                        <input type="text" value={cert.credentialId || ''} onChange={e => { const u = [...formData.certifications]; u[i] = { ...u[i], credentialId: e.target.value }; setFormData(prev => ({ ...prev, certifications: u })); }} className="w-full px-6 py-3 bg-gray-50 border border-transparent rounded-2xl text-sm font-bold text-gray-900 focus:bg-white outline-none transition-all" placeholder="e.g. AZ-900-12345" />
+                      </div>
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Credential URL</label>
+                        <input type="url" value={cert.link} onChange={e => { const u = [...formData.certifications]; u[i] = { ...u[i], link: e.target.value }; setFormData(prev => ({ ...prev, certifications: u })); }} className="w-full px-6 py-3 bg-gray-50 border border-transparent rounded-2xl text-sm font-bold text-gray-900 focus:bg-white outline-none transition-all" placeholder="https://..." />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -2624,7 +2733,7 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                 <div key={`ach-${i}`} className="bg-white border border-gray-100 rounded-[2.5rem] p-8 relative group hover:border-[#7C3AED]/30 transition-all shadow-sm">
                   <button
                     onClick={() => handleDeleteItem('achievement', i, 'achievements')}
-                    className="absolute top-6 right-6 p-2 text-gray-200 hover:text-red-400 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100"
+                    className="absolute top-3 right-3 p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 z-20"
                   >
                     <Plus className="w-5 h-5 rotate-45" />
                   </button>
@@ -2648,8 +2757,24 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                       <input type="url" value={ach.link} onChange={e => { const u = [...formData.achievements]; u[i] = { ...u[i], link: e.target.value }; setFormData(prev => ({ ...prev, achievements: u })); }} className="w-full px-6 py-3 bg-gray-50 border border-transparent rounded-2xl text-sm font-bold text-gray-900 focus:bg-white outline-none transition-all" placeholder="https://..." />
                     </div>
                     <div className="md:col-span-2 space-y-2">
-                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Description</label>
-                      <textarea value={ach.description} onChange={e => { const u = [...formData.achievements]; u[i] = { ...u[i], description: e.target.value }; setFormData(prev => ({ ...prev, achievements: u })); }} className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl text-sm font-bold min-h-[80px] text-gray-900 focus:bg-white outline-none transition-all" placeholder="Explain what you achieved..." />
+                      <div className="flex items-center justify-between">
+                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Description</label>
+                        <span className={`text-[10px] font-bold ${ach.description?.length > 100 ? 'text-red-500' : 'text-gray-400'}`}>
+                          {ach.description?.length || 0} / 100 characters
+                        </span>
+                      </div>
+                      <textarea
+                        value={ach.description}
+                        onChange={e => {
+                          if (e.target.value.length <= 100 || e.target.value.length < ach.description.length) {
+                            const u = [...formData.achievements];
+                            u[i] = { ...u[i], description: e.target.value };
+                            setFormData(prev => ({ ...prev, achievements: u }));
+                          }
+                        }}
+                        className="w-full px-6 py-4 bg-gray-50 border border-transparent rounded-2xl text-sm font-bold min-h-[80px] text-gray-900 focus:bg-white outline-none transition-all"
+                        placeholder="Explain what you achieved (max 100 characters)..."
+                      />
                     </div>
                   </div>
                 </div>
@@ -2689,9 +2814,10 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                {[
-                 { id: 'linkedin', label: 'LinkedIn', icon: Share2, color: '#0077B5', placeholder: 'linkedin.com/in/...' },
+                 { id: 'github', label: 'GitHub', icon: Github, color: '#333333', placeholder: 'github.com/...' },
+                 { id: 'linkedin', label: 'LinkedIn', icon: Linkedin, color: '#0077B5', placeholder: 'linkedin.com/in/...' },
+                 { id: 'leetcode', label: 'LeetCode', icon: Code, color: '#FFA116', placeholder: 'leetcode.com/u/...' },
                  { id: 'portfolio', label: 'Portfolio', icon: Globe, color: '#7C3AED', placeholder: 'yourwebsite.com' },
-                 { id: 'hackerrank', label: 'HackerRank', icon: Book, color: '#2EC866', placeholder: 'hackerrank.com/profile/...' },
                ].map(social => (
                  <div key={social.label} className="space-y-3 group">
                    <div className="flex items-center gap-3 ml-1">
@@ -2710,6 +2836,25 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                    />
                  </div>
                ))}
+               
+               {/* Custom Links Section (Added but not rendered in Public Profile) */}
+               <div className="md:col-span-2 space-y-4 pt-4 border-t border-gray-100">
+                 <div className="flex items-center justify-between">
+                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] ml-1">Additional Custom Links</label>
+                   <button type="button" onClick={() => setFormData(prev => ({ ...prev, customLinks: [...(prev.customLinks || []), { title: '', url: '' }] }))} className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-gray-200 transition-all">
+                     <Plus className="w-3 h-3" /> Add Link
+                   </button>
+                 </div>
+                 {formData.customLinks?.map((link: any, idx: number) => (
+                   <div key={idx} className="flex gap-4 items-start relative group">
+                     <button onClick={() => setFormData(prev => ({ ...prev, customLinks: prev.customLinks.filter((_: any, i: number) => i !== idx) }))} className="absolute -left-3 top-4 p-1 text-gray-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                       <Plus className="w-4 h-4 rotate-45" />
+                     </button>
+                     <input type="text" value={link.title} onChange={e => { const u = [...formData.customLinks]; u[idx].title = e.target.value; setFormData(prev => ({ ...prev, customLinks: u })) }} placeholder="Link Title (e.g. Medium)" className="w-1/3 px-4 py-3 bg-gray-50 rounded-xl text-sm font-bold text-gray-900 outline-none" />
+                     <input type="url" value={link.url} onChange={e => { const u = [...formData.customLinks]; u[idx].url = e.target.value; setFormData(prev => ({ ...prev, customLinks: u })) }} placeholder="https://..." className="w-2/3 px-4 py-3 bg-gray-50 rounded-xl text-sm font-bold text-gray-900 outline-none" />
+                   </div>
+                 ))}
+               </div>
             </div>
 
             <div className="pt-8 flex justify-end">
@@ -2840,17 +2985,16 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
   };
 
   return (
-    <div className="max-w-[1400px] mx-auto min-h-screen bg-white/90 backdrop-blur-sm pt-0 px-4 sm:px-8 lg:px-12 pb-12 font-sans selection:bg-[#7C3AED] selection:text-white">
-
+    <>
       {/* ── Global Save Toast ── */}
       <AnimatePresence>
         {saveStatus && (
           <motion.div
-            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            initial={{ opacity: 0, y: -24, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 24, scale: 0.98 }}
+            exit={{ opacity: 0, y: -24, scale: 0.98 }}
             transition={{ duration: 0.45, ease: 'easeOut' }}
-            className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[70] px-8 py-4 rounded-2xl text-white text-sm font-bold shadow-2xl flex items-center gap-3 backdrop-blur-md pointer-events-none
+            className={`fixed top-8 left-1/2 -translate-x-1/2 z-[9999] px-8 py-4 rounded-2xl text-white text-sm font-bold shadow-2xl flex items-center gap-3 backdrop-blur-md pointer-events-none
               ${saveStatus.type === 'success' ? 'bg-emerald-500/90' : 'bg-red-500/90'}`}
           >
             <span>{saveStatus.type === 'success' ? '✓' : '✗'}</span>
@@ -2858,6 +3002,8 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
           </motion.div>
         )}
       </AnimatePresence>
+
+      <div className="max-w-[1400px] mx-auto min-h-screen bg-white/90 backdrop-blur-sm pt-0 px-4 sm:px-8 lg:px-12 pb-12 font-sans selection:bg-[#7C3AED] selection:text-white">
 
       {/* Header with Back Button */}
       <div className="flex items-center gap-6 mb-6 pt-0 sm:pt-0 lg:pt-1">
@@ -2990,6 +3136,11 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                           value={formData.oneStrongWord}
                           onChange={handleChange}
                           onBlur={handleStrongWordInputBlur}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.currentTarget.blur();
+                            }
+                          }}
                           placeholder="Aspiring entrepreneur"
                           className="mt-5 w-full rounded-[1.75rem] border border-gray-200 bg-white px-5 py-4 text-lg font-semibold text-gray-900 outline-none transition-all focus:border-[#7C3AED]/50 focus:ring-4 focus:ring-[#7C3AED]/10"
                         />
@@ -3126,11 +3277,9 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
                     whileHover={{ y: -6 }}
                     transition={{ duration: 0.25, ease: 'easeOut' }}
                     className="rounded-[2rem] border border-white/20 bg-white/10 p-5 shadow-xl backdrop-blur-sm"
-                    style={{ borderImage: 'linear-gradient(135deg, rgba(255,255,255,0.45), rgba(255,255,255,0.08)) 1' }}
                   >
                     <div className="text-[10px] font-black uppercase tracking-[0.18em] text-white/75">{card.label}</div>
                     <div className="mt-3 text-3xl font-black text-white">{card.value}</div>
-                    <div className="mt-3 h-1 rounded-full bg-white/20" style={{ width: `${70 + index * 10}%` }} />
                   </motion.div>
                 ))}
               </div>
@@ -3431,6 +3580,7 @@ const publicProfileUrl = user?.user_id && typeof window !== 'undefined'
         </div>
       </div>
     </div>
+    </>
   );
 };
 

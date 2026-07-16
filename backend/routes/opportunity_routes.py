@@ -146,9 +146,44 @@ async def apply(data: dict = Body(...), user: dict = Depends(get_auth_user)):
     """API to apply for an opportunity."""
     try:
         data["user_id"] = user["user_id"]
+        
+        # Check if candidate is blocked by this opportunity's institution
+        opp_id = data.get("opportunity_id")
+        if opp_id:
+            opp_oid = None
+            try:
+                opp_oid = ObjectId(opp_id)
+            except Exception:
+                pass
+            
+            opp_query = {"$or": []}
+            if opp_oid:
+                opp_query["$or"].append({"_id": opp_oid})
+            opp_query["$or"].append({"_id": opp_id})
+            opp_query["$or"].append({"opportunity_id": opp_id})
+            
+            opp = await opportunities_col.find_one(opp_query)
+            if opp:
+                inst_id = opp.get("institution_id") or opp.get("createdBy")
+                user_email = user.get("email") or user.get("sub")
+                if inst_id and user_email:
+                    from db import db
+                    blocked = await db.blocked_entities.find_one({
+                        "institution_id": inst_id,
+                        "entity_type": "candidate",
+                        "identifier": user_email.strip().lower()
+                    })
+                    if blocked:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="You have been restricted from applying to opportunities hosted by this institution."
+                        )
+                        
         return await apply_for_opportunity(data)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

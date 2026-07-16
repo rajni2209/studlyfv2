@@ -87,6 +87,43 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
     const [packageStatusLoading, setPackageStatusLoading] = useState(false);
     const [imgErrors, setImgErrors] = useState<{logo: boolean; banner: boolean}>({ logo: false, banner: false });
 
+    const [blockedEntities, setBlockedEntities] = useState<any[]>([]);
+    const [blockedLoading, setBlockedLoading] = useState(false);
+    const [blockedError, setBlockedError] = useState<string | null>(null);
+    const [blockModalOpen, setBlockModalOpen] = useState(false);
+    const [blockSubmitting, setBlockSubmitting] = useState(false);
+
+    // Form fields for block modal
+    const [blockType, setBlockType] = useState<'candidate' | 'organization'>('candidate');
+    const [blockName, setBlockName] = useState('');
+    const [blockIdentifier, setBlockIdentifier] = useState('');
+    const [blockReason, setBlockReason] = useState('');
+    const [blockFormError, setBlockFormError] = useState<string | null>(null);
+
+    // State for Custom Communications
+    const [instEvents, setInstEvents] = useState<any[]>([]);
+    const [commHistory, setCommHistory] = useState<any[]>([]);
+    const [commLoading, setCommLoading] = useState(false);
+    const [commError, setCommError] = useState<string | null>(null);
+    const [isComposeOpen, setIsComposeOpen] = useState(false);
+
+    // Form fields for message composer
+    const [compEventId, setCompEventId] = useState('');
+    const [compSegmentType, setCompSegmentType] = useState('all');
+    const [compCriteria, setCompCriteria] = useState<any>({
+        department: '',
+        year: '',
+        status: 'APPROVED',
+        min_score: 0
+    });
+    const [compSubject, setCompSubject] = useState('');
+    const [compMessage, setCompMessage] = useState('');
+    const [compChannel, setCompChannel] = useState<'email' | 'in_app' | 'both'>('both');
+    const [compTargetCount, setCompTargetCount] = useState<number | null>(null);
+    const [compEstimating, setCompEstimating] = useState(false);
+    const [compSubmitting, setCompSubmitting] = useState(false);
+    const [compFormError, setCompFormError] = useState<string | null>(null);
+
     const prevLogoRef = useRef('');
     const prevBannerRef = useRef('');
 
@@ -200,6 +237,235 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
             clearTimeout(safetyTimer);
         };
     }, [institutionId]);
+
+    const fetchBlockedEntities = async () => {
+        setBlockedLoading(true);
+        setBlockedError(null);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/institution/blocked-entities/`, {
+                headers: authHeaders()
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setBlockedEntities(data);
+            } else {
+                setBlockedError("Failed to load blocked entities");
+            }
+        } catch (err) {
+            setBlockedError("Error fetching blocked entities");
+        } finally {
+            setBlockedLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeSection !== 'blocked') return;
+        fetchBlockedEntities();
+    }, [activeSection]);
+
+    const fetchCommHistory = async () => {
+        setCommLoading(true);
+        setCommError(null);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/institution/communications/history`, {
+                headers: authHeaders()
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setCommHistory(data);
+            } else {
+                setCommError("Failed to load communication history");
+            }
+        } catch (err) {
+            setCommError("Error fetching communication history");
+        } finally {
+            setCommLoading(false);
+        }
+    };
+
+    const fetchEvents = async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/events/`, {
+                headers: authHeaders()
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setInstEvents(data);
+                if (data.length > 0 && !compEventId) {
+                    setCompEventId(data[0]._id || data[0].event_id);
+                }
+            }
+        } catch (err) {
+            console.error("Error fetching events:", err);
+        }
+    };
+
+    const estimateTargetCount = async () => {
+        if (!compEventId) return;
+        setCompEstimating(true);
+        try {
+            const currentCriteria: any = {};
+            if (compSegmentType === 'by_department') {
+                currentCriteria.department = compCriteria.department;
+            } else if (compSegmentType === 'by_year') {
+                currentCriteria.year = compCriteria.year;
+            } else if (compSegmentType === 'by_status') {
+                currentCriteria.status = compCriteria.status;
+            } else if (compSegmentType === 'by_performance') {
+                currentCriteria.min_score = Number(compCriteria.min_score || 0);
+            }
+
+            const res = await fetch(`${API_BASE_URL}/api/v1/institution/communications/segment-count`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders()
+                },
+                body: JSON.stringify({
+                    event_id: compEventId,
+                    segment_type: compSegmentType,
+                    criteria: currentCriteria
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setCompTargetCount(data.count);
+            } else {
+                setCompTargetCount(0);
+            }
+        } catch (err) {
+            console.error("Error estimating target count:", err);
+            setCompTargetCount(0);
+        } finally {
+            setCompEstimating(false);
+        }
+    };
+
+    useEffect(() => {
+        if (isComposeOpen && compEventId) {
+            estimateTargetCount();
+        }
+    }, [compEventId, compSegmentType, compCriteria.department, compCriteria.year, compCriteria.status, compCriteria.min_score, isComposeOpen]);
+
+    const handleSendBroadcast = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!compSubject.trim() || !compMessage.trim()) {
+            setCompFormError("Subject and Message body are required");
+            return;
+        }
+        if (!compEventId) {
+            setCompFormError("Please select an event");
+            return;
+        }
+        setCompSubmitting(true);
+        setCompFormError(null);
+        try {
+            const currentCriteria: any = {};
+            if (compSegmentType === 'by_department') {
+                currentCriteria.department = compCriteria.department;
+            } else if (compSegmentType === 'by_year') {
+                currentCriteria.year = compCriteria.year;
+            } else if (compSegmentType === 'by_status') {
+                currentCriteria.status = compCriteria.status;
+            } else if (compSegmentType === 'by_performance') {
+                currentCriteria.min_score = Number(compCriteria.min_score || 0);
+            }
+
+            const res = await fetch(`${API_BASE_URL}/api/v1/institution/communications/send`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders()
+                },
+                body: JSON.stringify({
+                    event_id: compEventId,
+                    segment_type: compSegmentType,
+                    criteria: currentCriteria,
+                    subject: compSubject.trim(),
+                    message_body: compMessage.trim(),
+                    message_type: compChannel
+                })
+            });
+            if (res.ok) {
+                setCompSubject('');
+                setCompMessage('');
+                setCompFormError(null);
+                setIsComposeOpen(false);
+                fetchCommHistory();
+            } else {
+                const errorData = await res.json();
+                setCompFormError(errorData.detail || "Failed to dispatch message campaign");
+            }
+        } catch (err) {
+            setCompFormError("An error occurred during submission");
+        } finally {
+            setCompSubmitting(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeSection !== 'communications') return;
+        fetchCommHistory();
+        fetchEvents();
+    }, [activeSection]);
+
+    const handleBlockEntity = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!blockIdentifier.trim() || !blockReason.trim()) {
+            setBlockFormError("Email/Identifier and Reason are required");
+            return;
+        }
+        setBlockSubmitting(true);
+        setBlockFormError(null);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/institution/blocked-entities/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...authHeaders()
+                },
+                body: JSON.stringify({
+                    entity_type: blockType,
+                    name: blockName.trim() || undefined,
+                    identifier: blockIdentifier.trim(),
+                    reason: blockReason.trim()
+                })
+            });
+            if (res.ok) {
+                setBlockName('');
+                setBlockIdentifier('');
+                setBlockReason('');
+                setBlockType('candidate');
+                setBlockFormError(null);
+                setBlockModalOpen(false);
+                fetchBlockedEntities();
+            } else {
+                const errorData = await res.json();
+                setBlockFormError(errorData.detail || "Failed to block entity");
+            }
+        } catch (err) {
+            setBlockFormError("An error occurred during submission");
+        } finally {
+            setBlockSubmitting(false);
+        }
+    };
+
+    const handleUnblockEntity = async (entityId: string) => {
+        if (!window.confirm("Are you sure you want to unblock this entity?")) return;
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/institution/blocked-entities/${entityId}`, {
+                method: 'DELETE',
+                headers: authHeaders()
+            });
+            if (res.ok) {
+                fetchBlockedEntities();
+            } else {
+                alert("Failed to unblock entity");
+            }
+        } catch (err) {
+            alert("An error occurred while unblocking");
+        }
+    };
 
     useEffect(() => {
         if (activeSection !== 'plan' || plansData) return;
@@ -809,16 +1075,294 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
             case 'communications':
                 return (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-bold text-slate-900">Custom Communications</h2>
+                        {/* Header */}
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-900 font-sans">Custom Communications</h2>
+                                <p className="text-sm text-slate-500 mt-1">Create segment campaigns and message your participants via email and in-app alerts.</p>
+                            </div>
+                            <button
+                                onClick={() => setIsComposeOpen(true)}
+                                className="flex items-center gap-2 px-6 py-3 bg-[#6C3BFF] hover:bg-[#582be6] text-white font-bold text-xs tracking-wider rounded-2xl shadow-lg shadow-purple-100 transition-all uppercase"
+                            >
+                                <MessageSquare size={16} />
+                                Compose Broadcast
+                            </button>
                         </div>
-                        <div className="p-12 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 text-center">
-                            <MessageSquare className="mx-auto text-slate-300 mb-4" size={48} />
-                            <h3 className="text-lg font-bold text-slate-900 font-sans">Premium Feature</h3>
-                            <p className="text-slate-500 max-w-sm mx-auto mt-2 text-sm">
-                                Custom email templates and SMS notifications are available for Premium institutions.
-                            </p>
+
+                        {/* Error Alert */}
+                        {commError && (
+                            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-100 rounded-3xl text-red-700 text-sm animate-in fade-in">
+                                <span className="font-semibold">⚠️</span> {commError}
+                            </div>
+                        )}
+
+                        {/* Logs / History Table */}
+                        <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+                            <div className="p-6 border-b border-slate-50 flex items-center justify-between">
+                                <h3 className="text-lg font-bold text-slate-900">Broadcast Campaigns</h3>
+                                <span className="text-xs font-bold text-slate-400 bg-slate-50 px-3 py-1 rounded-full uppercase tracking-wider font-sans">
+                                    {commHistory.length} sent
+                                </span>
+                            </div>
+
+                            {commLoading ? (
+                                <div className="p-16 text-center">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-2 border-t-[#6C3BFF] border-slate-100 mx-auto" />
+                                    <p className="text-slate-400 text-sm mt-3 font-medium">Loading campaign records...</p>
+                                </div>
+                            ) : commHistory.length === 0 ? (
+                                <div className="p-16 text-center">
+                                    <MessageSquare className="mx-auto text-slate-200 mb-4 animate-bounce duration-1000" size={48} />
+                                    <h4 className="text-md font-bold text-slate-800 font-sans">No broadcasts dispatched yet</h4>
+                                    <p className="text-slate-400 text-sm mt-2 max-w-xs mx-auto">
+                                        Use the compose button above to target specific participant groups and broadcast updates.
+                                    </p>
+                                </div>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-slate-50 text-[10px] uppercase tracking-widest font-black text-slate-400 border-b border-slate-100">
+                                                <th className="py-4 px-6 font-sans">Subject</th>
+                                                <th className="py-4 px-6 font-sans">Snippet</th>
+                                                <th className="py-4 px-6 font-sans">Channel</th>
+                                                <th className="py-4 px-6 font-sans">Recipients</th>
+                                                <th className="py-4 px-6 font-sans">Date Sent</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {commHistory.map((h: any) => (
+                                                <tr key={h.id} className="text-slate-700 text-sm hover:bg-slate-50/50 transition-colors">
+                                                    <td className="py-4 px-6 font-bold text-slate-900">{h.subject}</td>
+                                                    <td className="py-4 px-6 text-slate-500 max-w-xs truncate">{h.body}</td>
+                                                    <td className="py-4 px-6">
+                                                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider ${
+                                                            h.type === 'email' ? 'bg-sky-50 text-sky-700' :
+                                                            h.type === 'in_app' ? 'bg-amber-50 text-amber-700' :
+                                                            'bg-purple-50 text-purple-700'
+                                                        }`}>
+                                                            {h.type === 'both' ? 'Email + App' : h.type}
+                                                        </span>
+                                                    </td>
+                                                    <td className="py-4 px-6 font-semibold text-slate-600">
+                                                        {h.recipient_count || '1+'}
+                                                    </td>
+                                                    <td className="py-4 px-6 text-slate-400 text-xs font-medium font-sans">
+                                                        {new Date(h.created_at).toLocaleDateString()} {new Date(h.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
+
+                        {/* Compose Broadcast Drawer Modal */}
+                        {isComposeOpen && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-end bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-300">
+                                <div className="w-[500px] h-full bg-white shadow-2xl flex flex-col p-8 overflow-y-auto animate-in slide-in-from-right duration-300">
+                                    <div className="flex items-center justify-between pb-6 border-b border-slate-100">
+                                        <div>
+                                            <h3 className="text-xl font-bold text-slate-900 font-sans">Compose Broadcast</h3>
+                                            <p className="text-xs text-slate-400 mt-1">Target participant segments and send updates</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setIsComposeOpen(false)}
+                                            className="p-2 hover:bg-slate-100 text-slate-400 hover:text-slate-600 rounded-full transition-colors"
+                                        >
+                                            ❌
+                                        </button>
+                                    </div>
+
+                                    {compFormError && (
+                                        <div className="mt-4 p-4 bg-red-50 border border-red-100 rounded-2xl text-red-600 text-xs font-semibold">
+                                            {compFormError}
+                                        </div>
+                                    )}
+
+                                    <form onSubmit={handleSendBroadcast} className="flex-1 mt-6 space-y-6">
+                                        {/* Event selection */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block font-sans">Target Event</label>
+                                            <select
+                                                value={compEventId}
+                                                onChange={(e) => setCompEventId(e.target.value)}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 focus:outline-none focus:border-[#6C3BFF] focus:bg-white transition-all font-sans"
+                                                required
+                                            >
+                                                <option value="" disabled>Select an Event</option>
+                                                {instEvents.map((ev: any) => (
+                                                    <option key={ev._id || ev.event_id} value={ev._id || ev.event_id}>
+                                                        {ev.title || ev.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+
+                                        {/* Segment filter selection */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block font-sans">Recipient Segment</label>
+                                            <select
+                                                value={compSegmentType}
+                                                onChange={(e) => setCompSegmentType(e.target.value)}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 focus:outline-none focus:border-[#6C3BFF] focus:bg-white transition-all font-sans"
+                                            >
+                                                <option value="all">All Registered Students</option>
+                                                <option value="by_department">Filter by Department</option>
+                                                <option value="by_year">Filter by Academic Year</option>
+                                                <option value="by_status">Filter by Registration Status</option>
+                                                <option value="by_performance">Filter by Score / Performance</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Dynamic criteria fields */}
+                                        {compSegmentType === 'by_department' && (
+                                            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block font-sans">Department Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={compCriteria.department}
+                                                    onChange={(e) => setCompCriteria({ ...compCriteria, department: e.target.value })}
+                                                    placeholder="e.g. Computer Science"
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-800 focus:outline-none focus:border-[#6C3BFF] focus:bg-white transition-all font-sans"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {compSegmentType === 'by_year' && (
+                                            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block font-sans">Year of Study</label>
+                                                <input
+                                                    type="text"
+                                                    value={compCriteria.year}
+                                                    onChange={(e) => setCompCriteria({ ...compCriteria, year: e.target.value })}
+                                                    placeholder="e.g. 3rd Year or 2026"
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-800 focus:outline-none focus:border-[#6C3BFF] focus:bg-white transition-all font-sans"
+                                                    required
+                                                />
+                                            </div>
+                                        )}
+
+                                        {compSegmentType === 'by_status' && (
+                                            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block font-sans">Registration Status</label>
+                                                <select
+                                                    value={compCriteria.status}
+                                                    onChange={(e) => setCompCriteria({ ...compCriteria, status: e.target.value })}
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-semibold text-slate-800 focus:outline-none focus:border-[#6C3BFF] focus:bg-white transition-all font-sans"
+                                                >
+                                                    <option value="APPROVED">Approved / Confirmed</option>
+                                                    <option value="PENDING">Pending Approval</option>
+                                                    <option value="REJECTED">Rejected</option>
+                                                </select>
+                                            </div>
+                                        )}
+
+                                        {compSegmentType === 'by_performance' && (
+                                            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+                                                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block font-sans">Minimum Average Score</label>
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    max="100"
+                                                    value={compCriteria.min_score}
+                                                    onChange={(e) => setCompCriteria({ ...compCriteria, min_score: Number(e.target.value) })}
+                                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-800 focus:outline-none focus:border-[#6C3BFF] focus:bg-white transition-all font-sans"
+                                                    required
+                                                />
+                                                <p className="text-[10px] text-slate-400 font-medium font-sans">Targets candidates scoring at or above this score threshold.</p>
+                                            </div>
+                                        )}
+
+                                        {/* Estimation count indicator */}
+                                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between">
+                                            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider font-sans">Target Audience</span>
+                                            {compEstimating ? (
+                                                <span className="text-xs text-slate-400 animate-pulse font-medium font-sans">Estimating count...</span>
+                                            ) : (
+                                                <span className="text-xs font-black text-[#6C3BFF] bg-purple-50 px-3.5 py-1 rounded-full uppercase tracking-wider font-sans">
+                                                    {compTargetCount !== null ? `${compTargetCount} matching` : '0 matching'}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Messaging Channels */}
+                                        <div className="space-y-2 font-sans">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block font-sans">Communication Channels</label>
+                                            <div className="grid grid-cols-3 gap-3">
+                                                {(['email', 'in_app', 'both'] as const).map((channel) => (
+                                                    <button
+                                                        key={channel}
+                                                        type="button"
+                                                        onClick={() => setCompChannel(channel)}
+                                                        className={`p-3 border rounded-2xl text-center text-xs font-semibold transition-all font-sans ${
+                                                            compChannel === channel
+                                                                ? 'border-[#6C3BFF] bg-purple-50/40 text-[#6C3BFF] font-bold'
+                                                                : 'border-slate-200 hover:border-slate-300 text-slate-500'
+                                                        }`}
+                                                    >
+                                                        <span className="block capitalize font-sans">{channel === 'both' ? 'Both' : channel.replace('_', ' ')}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Subject */}
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block font-sans">Subject Line</label>
+                                            <input
+                                                type="text"
+                                                value={compSubject}
+                                                onChange={(e) => setCompSubject(e.target.value)}
+                                                placeholder="Enter message subject"
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-800 focus:outline-none focus:border-[#6C3BFF] focus:bg-white transition-all font-sans"
+                                                required
+                                            />
+                                        </div>
+
+                                        {/* Message Body */}
+                                        <div className="space-y-2 font-sans">
+                                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block font-sans">Message Body (HTML Supported)</label>
+                                            <textarea
+                                                value={compMessage}
+                                                onChange={(e) => setCompMessage(e.target.value)}
+                                                placeholder="Write your email/notification details here..."
+                                                rows={6}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-medium text-slate-800 focus:outline-none focus:border-[#6C3BFF] focus:bg-white transition-all font-sans"
+                                                required
+                                            />
+                                        </div>
+
+                                        {/* Action buttons */}
+                                        <div className="flex gap-3 pt-4 border-t border-slate-100 font-sans">
+                                            <button
+                                                type="button"
+                                                onClick={() => setIsComposeOpen(false)}
+                                                className="flex-1 py-3 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-2xl text-xs font-black uppercase tracking-widest transition-colors font-sans"
+                                            >
+                                                Cancel
+                                            </button>
+                                            <button
+                                                type="submit"
+                                                disabled={compSubmitting || compTargetCount === 0}
+                                                className="flex-1 py-3 bg-[#6C3BFF] hover:bg-[#582be6] disabled:bg-slate-100 disabled:text-slate-400 text-white rounded-2xl text-xs font-black uppercase tracking-widest transition-colors flex items-center justify-center gap-2 shadow-lg shadow-purple-50 font-sans"
+                                            >
+                                                {compSubmitting ? (
+                                                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-t-white border-purple-200" />
+                                                ) : (
+                                                    <>
+                                                        🚀 Send Broadcast
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 );
             case 'onboarding':
@@ -964,13 +1508,199 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ institutionId, onProfileUpd
                 return (
                     <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-500">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-black text-slate-900 tracking-tight">Blocked Candidates & Organizations</h2>
-                            <p className="text-sm text-slate-500">Manage entities that are restricted from your events.</p>
+                            <div>
+                                <h2 className="text-xl font-black text-slate-900 tracking-tight">Blocked Candidates & Organizations</h2>
+                                <p className="text-sm text-slate-500">Manage entities that are restricted from your events.</p>
+                            </div>
+                            <button
+                                onClick={() => setBlockModalOpen(true)}
+                                className="flex items-center gap-2 px-6 py-3 bg-[#6C3BFF] text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-[#5A2EE5] transition-all shadow-lg shadow-purple-100"
+                            >
+                                <Plus size={16} />
+                                <span>Block Entity</span>
+                            </button>
                         </div>
-                        <div className="p-12 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 text-center">
-                            <ShieldAlert size={48} className="mx-auto text-slate-200 mb-4" />
-                            <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No blocked entities found</p>
-                        </div>
+
+                        {blockedLoading ? (
+                            <div className="flex justify-center py-24">
+                                <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                            </div>
+                        ) : blockedError ? (
+                            <div className="p-6 bg-rose-50 border border-rose-100 text-rose-700 rounded-[2rem] text-sm font-semibold flex items-center gap-3">
+                                <AlertCircle size={20} className="shrink-0 text-rose-500" />
+                                <span>{blockedError}</span>
+                            </div>
+                        ) : blockedEntities.length === 0 ? (
+                            <div className="p-12 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 text-center">
+                                <ShieldAlert size={48} className="mx-auto text-slate-200 mb-4" />
+                                <p className="text-slate-400 font-bold uppercase tracking-widest text-xs">No blocked entities found</p>
+                            </div>
+                        ) : (
+                            <div className="bg-white border border-slate-100 rounded-[2rem] overflow-hidden shadow-sm">
+                                <div className="overflow-x-auto no-scrollbar">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] bg-slate-50/50 border-b border-slate-100">
+                                                <th className="px-8 py-5">Entity Name</th>
+                                                <th className="px-8 py-5">Email/Identifier</th>
+                                                <th className="px-8 py-5">Type</th>
+                                                <th className="px-8 py-5">Reason</th>
+                                                <th className="px-8 py-5">Blocked On</th>
+                                                <th className="px-8 py-5 text-right">Action</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-50">
+                                            {blockedEntities.map((entity) => (
+                                                <tr key={entity.id} className="group hover:bg-slate-50/30 transition-colors">
+                                                    <td className="px-8 py-5 text-sm font-bold text-slate-900">
+                                                        {entity.name || <span className="text-slate-400 font-normal italic">Unnamed</span>}
+                                                    </td>
+                                                    <td className="px-8 py-5 text-sm font-medium text-slate-500">
+                                                        {entity.identifier}
+                                                    </td>
+                                                    <td className="px-8 py-5 text-xs font-bold">
+                                                        <span className={`inline-flex px-3 py-1 rounded-full uppercase tracking-wider text-[9px] font-black ${
+                                                            entity.entity_type === 'candidate' 
+                                                                ? 'bg-purple-100 text-purple-700' 
+                                                                : 'bg-blue-100 text-blue-700'
+                                                        }`}>
+                                                            {entity.entity_type}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-8 py-5 text-sm font-medium text-slate-600 max-w-xs truncate" title={entity.reason}>
+                                                        {entity.reason}
+                                                    </td>
+                                                    <td className="px-8 py-5 text-sm font-medium text-slate-500">
+                                                        {new Date(entity.blocked_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                                                    </td>
+                                                    <td className="px-8 py-5 text-right">
+                                                        <button
+                                                            onClick={() => handleUnblockEntity(entity.id)}
+                                                            className="p-2.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+                                                            title="Unblock Entity"
+                                                        >
+                                                            <Trash2 size={16} />
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        <AnimatePresence>
+                            {blockModalOpen && (
+                                <motion.div
+                                    initial={{ opacity: 0 }}
+                                    animate={{ opacity: 1 }}
+                                    exit={{ opacity: 0 }}
+                                    className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center px-4"
+                                >
+                                    <motion.div
+                                        initial={{ y: 24, scale: 0.98 }}
+                                        animate={{ y: 0, scale: 1 }}
+                                        exit={{ y: 24, scale: 0.98 }}
+                                        className="w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl overflow-hidden border border-slate-100"
+                                    >
+                                        <div className="p-6 md:p-8 border-b border-slate-100 bg-gradient-to-r from-red-50 to-purple-50">
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div>
+                                                    <p className="text-[10px] font-black uppercase tracking-[0.25em] text-red-500">Restricted Access</p>
+                                                    <h3 className="mt-2 text-2xl font-black text-slate-900">Block Candidate / Org</h3>
+                                                    <p className="mt-2 text-sm text-slate-600">
+                                                        Restrict an individual candidate or partner organization from participating in future events.
+                                                    </p>
+                                                </div>
+                                                <button
+                                                    onClick={() => setBlockModalOpen(false)}
+                                                    className="p-2 hover:bg-slate-200/50 rounded-full transition-colors text-slate-400 hover:text-slate-600"
+                                                >
+                                                    <X size={20} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <form onSubmit={handleBlockEntity} className="p-6 md:p-8 space-y-6">
+                                            {blockFormError && (
+                                                <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700">
+                                                    {blockFormError}
+                                                </div>
+                                            )}
+
+                                            <div className="space-y-4">
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Entity Type</label>
+                                                    <select
+                                                        value={blockType}
+                                                        onChange={(e) => setBlockType(e.target.value as 'candidate' | 'organization')}
+                                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-100 outline-none transition-all text-sm font-bold"
+                                                    >
+                                                        <option value="candidate">Candidate (Student)</option>
+                                                        <option value="organization">Organization / Partner</option>
+                                                    </select>
+                                                </div>
+
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Name (Optional)</label>
+                                                    <input
+                                                        type="text"
+                                                        value={blockName}
+                                                        onChange={(e) => setBlockName(e.target.value)}
+                                                        placeholder="e.g. John Doe / Initech"
+                                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-100 outline-none transition-all text-sm font-bold"
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Email / Unique Identifier</label>
+                                                    <input
+                                                        type="text"
+                                                        value={blockIdentifier}
+                                                        onChange={(e) => setBlockIdentifier(e.target.value)}
+                                                        placeholder="e.g. candidate@domain.com"
+                                                        required
+                                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-100 outline-none transition-all text-sm font-bold"
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-1">
+                                                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Reason for Block</label>
+                                                    <textarea
+                                                        value={blockReason}
+                                                        onChange={(e) => setBlockReason(e.target.value)}
+                                                        placeholder="e.g. Violating competition rules / Inappropriate behavior"
+                                                        required
+                                                        rows={3}
+                                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:bg-white focus:ring-2 focus:ring-purple-100 outline-none transition-all text-sm font-bold resize-none"
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setBlockModalOpen(false)}
+                                                    disabled={blockSubmitting}
+                                                    className="px-5 py-3 rounded-full border border-slate-200 text-slate-600 font-black uppercase tracking-widest text-xs hover:bg-slate-50 disabled:opacity-60"
+                                                >
+                                                    Cancel
+                                                </button>
+                                                <button
+                                                    type="submit"
+                                                    disabled={blockSubmitting}
+                                                    className="px-5 py-3 rounded-full bg-red-600 text-white font-black uppercase tracking-widest text-xs hover:bg-red-700 disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg shadow-red-100"
+                                                >
+                                                    {blockSubmitting ? <Loader2 size={16} className="animate-spin" /> : <ShieldAlert size={16} />}
+                                                    <span>Restrict Entity</span>
+                                                </button>
+                                            </div>
+                                        </form>
+                                    </motion.div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 );
             case 'plan':
