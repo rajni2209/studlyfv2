@@ -8,7 +8,7 @@ import FocusPanel from '../components/roadmap/FocusPanel';
 import { 
   MonitorSmartphone, Database, Layers, BrainCircuit, Target, 
   PenTool, BarChart3, CloudCog, ShieldCheck, Terminal, 
-  ArrowLeft, CheckCircle2, ListOrdered, GraduationCap, Clock 
+  ArrowLeft, CheckCircle2, ListOrdered, GraduationCap, Clock, Share2, Check, Bookmark 
 } from 'lucide-react';
 
 // Icon Map
@@ -31,7 +31,29 @@ const RoadmapClone: React.FC = () => {
   // Global State (URL Driven)
   const { roleId } = useParams<{ roleId: string }>();
   const navigate = useNavigate();
-  
+  const [copiedRoleId, setCopiedRoleId] = useState<string | null>(null);
+  const [bookmarkedRoleIds, setBookmarkedRoleIds] = useState<string[]>([]);
+  const [filterTab, setFilterTab] = useState<'all' | 'bookmarked'>('all');
+
+  useEffect(() => {
+    const saved = localStorage.getItem('studlyf_bookmarked_roadmaps');
+    if (saved) {
+      try {
+        setBookmarkedRoleIds(JSON.parse(saved));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  const handleToggleBookmark = (id: string) => {
+    setBookmarkedRoleIds(prev => {
+      const updated = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('studlyf_bookmarked_roadmaps', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const selectedRole = useMemo(() => {
     return rolesData.find(r => r.id === roleId) || null;
   }, [roleId]);
@@ -211,18 +233,84 @@ const RoadmapClone: React.FC = () => {
               <h2 className="text-3xl md:text-5xl font-black text-[#1A1A1A] tracking-tight mb-4">Choose Your Track</h2>
               <p className="text-gray-500 text-lg">Select a role to generate your personalized execution roadmap.</p>
             </div>
+            {/* Filter Tabs */}
+            <div className="flex justify-center gap-3 mb-12">
+              <button
+                onClick={() => setFilterTab('all')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all border ${
+                  filterTab === 'all'
+                    ? 'bg-[#1A1A1A] text-white border-[#1A1A1A] shadow-md'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:shadow-sm hover:text-gray-800'
+                }`}
+              >
+                All Tracks
+              </button>
+              <button
+                onClick={() => setFilterTab('bookmarked')}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all border ${
+                  filterTab === 'bookmarked'
+                    ? 'bg-[#6C2BFF] text-white border-[#6C2BFF] shadow-md'
+                    : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:shadow-sm hover:text-gray-800'
+                }`}
+              >
+                ⭐ Bookmarked
+              </button>
+            </div>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {rolesData.map((role, idx) => (
-                <motion.div
-                  key={role.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: idx * 0.05 }}
-                  onClick={() => handleRoleSelect(role)}
-                  className="bg-[#F8F9FC] border border-gray-100 rounded-3xl p-6 cursor-pointer group hover:bg-white hover:shadow-[0_20px_50px_rgba(108,43,255,0.1)] hover:border-[#6C2BFF]/20 transition-all duration-300 flex flex-col"
-                >
+              {(() => {
+                const displayedRoles = filterTab === 'all' 
+                  ? rolesData 
+                  : rolesData.filter(role => bookmarkedRoleIds.includes(role.id));
+                
+                if (displayedRoles.length === 0) {
+                  return (
+                    <div className="col-span-1 md:col-span-2 lg:col-span-3 text-center py-20 bg-gray-50 rounded-3xl border border-dashed border-gray-200">
+                      <Bookmark className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                      <h3 className="text-lg font-bold text-gray-700 mb-1">No Bookmarked Tracks</h3>
+                      <p className="text-sm text-gray-400">Click the bookmark icon on any track to save it here.</p>
+                    </div>
+                  );
+                }
+
+                return displayedRoles.map((role, idx) => (
+                  <motion.div
+                    key={role.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: idx * 0.05 }}
+                    onClick={() => handleRoleSelect(role)}
+                    className="bg-[#F8F9FC] border border-gray-100 rounded-3xl p-6 cursor-pointer group hover:bg-white hover:shadow-[0_20px_50px_rgba(108,43,255,0.1)] hover:border-[#6C2BFF]/20 transition-all duration-300 flex flex-col relative"
+                  >
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleBookmark(role.id);
+                      }}
+                      className="absolute top-6 right-16 w-8 h-8 bg-white hover:bg-gray-50 text-gray-400 hover:text-amber-500 rounded-lg border border-gray-100 hover:border-gray-200 flex items-center justify-center transition-all duration-200 shadow-sm z-10"
+                      title={bookmarkedRoleIds.includes(role.id) ? "Remove Bookmark" : "Bookmark Roadmap"}
+                    >
+                      <Bookmark className={`w-3.5 h-3.5 ${bookmarkedRoleIds.includes(role.id) ? "fill-amber-400 text-amber-400" : ""}`} />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const absoluteUrl = `${window.location.origin}/roadmaps/${role.id}`;
+                        navigator.clipboard.writeText(absoluteUrl).then(() => {
+                          setCopiedRoleId(role.id);
+                          setTimeout(() => setCopiedRoleId(null), 2000);
+                        });
+                      }}
+                      className="absolute top-6 right-6 w-8 h-8 bg-white hover:bg-gray-50 text-gray-400 hover:text-[#6C2BFF] rounded-lg border border-gray-100 hover:border-gray-200 flex items-center justify-center transition-all duration-200 shadow-sm z-10"
+                      title="Share Roadmap"
+                    >
+                      {copiedRoleId === role.id ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      ) : (
+                        <Share2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
                   <div className="w-12 h-12 rounded-2xl bg-white border border-gray-100 flex items-center justify-center text-gray-400 group-hover:text-[#6C2BFF] group-hover:scale-110 transition-all shadow-sm mb-6">
                     {iconMap[role.iconName] || <Terminal className="w-6 h-6" />}
                   </div>
@@ -243,7 +331,8 @@ const RoadmapClone: React.FC = () => {
                     </span>
                   </div>
                 </motion.div>
-              ))}
+                ));
+              })()}
             </div>
           </div>
         </section>

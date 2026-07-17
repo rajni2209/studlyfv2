@@ -10,7 +10,13 @@ interface Tool {
     url: string;
 }
 
-const AIToolGrid: React.FC<{ tools: Tool[] }> = ({ tools }) => {
+interface AIToolGridProps {
+    tools: Tool[];
+    bookmarkedTools: string[];
+    onToggleBookmark: (name: string) => void;
+}
+
+const AIToolGrid: React.FC<AIToolGridProps> = ({ tools, bookmarkedTools, onToggleBookmark }) => {
     return (
         <motion.div
             layout
@@ -26,7 +32,11 @@ const AIToolGrid: React.FC<{ tools: Tool[] }> = ({ tools }) => {
                         exit={{ opacity: 0, scale: 0.9, y: -20 }}
                         transition={{ duration: 0.45, ease: "easeOut" }}
                     >
-                        <AIToolCard tool={tool} />
+                        <AIToolCard 
+                            tool={tool} 
+                            isBookmarked={bookmarkedTools.includes(tool.name)} 
+                            onToggleBookmark={() => onToggleBookmark(tool.name)} 
+                        />
                     </motion.div>
                 ))}
             </AnimatePresence>

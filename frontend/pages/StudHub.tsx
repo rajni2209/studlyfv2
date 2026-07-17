@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { BrainCircuit, Gift, Landmark, Map, ArrowRight, PlayCircle, Users, CheckCircle, TrendingUp } from 'lucide-react';
+import { BrainCircuit, Gift, Landmark, Map, ArrowRight, PlayCircle, Users, CheckCircle, TrendingUp, GraduationCap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DashboardFooter from '../components/DashboardFooter';
 
@@ -51,6 +51,17 @@ const StudHub: React.FC = () => {
       bg: "bg-gray-100",
       border: "hover:border-gray-300",
       shadow: "hover:shadow-[0_15px_30px_rgba(0,0,0,0.1)]"
+    },
+    {
+      title: "Scholarships",
+      description: "Explore 20+ verified national and international scholarships to fund your higher education.",
+      cta: "Explore Scholarships",
+      route: "/scholarships",
+      icon: GraduationCap,
+      color: "text-emerald-500",
+      bg: "bg-emerald-500/10",
+      border: "hover:border-emerald-500/30",
+      shadow: "hover:shadow-[0_15px_30px_rgba(16,185,129,0.15)]"
     }
   ];
 
@@ -131,7 +142,7 @@ const StudHub: React.FC = () => {
           <p className="text-lg text-gray-500 font-medium">Handpicked tools and systems to help students grow smarter and faster.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-24 text-left">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-24 text-left">
           {resources.map((res, idx) => (
             <motion.div
               key={idx}

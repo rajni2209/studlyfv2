@@ -20,6 +20,27 @@ const AITools: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
+    const [bookmarkedTools, setBookmarkedTools] = useState<string[]>([]);
+    const [filterTab, setFilterTab] = useState<'all' | 'bookmarked'>('all');
+
+    useEffect(() => {
+        const saved = localStorage.getItem('studlyf_bookmarked_tools');
+        if (saved) {
+            try {
+                setBookmarkedTools(JSON.parse(saved));
+            } catch (e) {
+                console.error(e);
+            }
+        }
+    }, []);
+
+    const handleToggleBookmark = (name: string) => {
+        setBookmarkedTools(prev => {
+            const updated = prev.includes(name) ? prev.filter(t => t !== name) : [...prev, name];
+            localStorage.setItem('studlyf_bookmarked_tools', JSON.stringify(updated));
+            return updated;
+        });
+    };
 
     useEffect(() => {
         fetchTools();
@@ -45,6 +66,10 @@ const AITools: React.FC = () => {
     useEffect(() => {
         let result = tools;
 
+        if (filterTab === 'bookmarked') {
+            result = result.filter(t => bookmarkedTools.includes(t.name));
+        }
+
         if (searchQuery) {
             const query = searchQuery.toLowerCase();
             result = result.filter(tool =>
@@ -55,7 +80,7 @@ const AITools: React.FC = () => {
         }
 
         setFilteredTools(result);
-    }, [searchQuery, tools]);
+    }, [searchQuery, tools, filterTab, bookmarkedTools]);
 
     return (
         <div className="min-h-screen bg-white text-[#111827] pt-32 pb-20 px-6 sm:px-12 relative overflow-hidden">
@@ -98,6 +123,30 @@ const AITools: React.FC = () => {
                     />
                 </motion.div>
 
+                {/* Custom Tab Filters */}
+                <div className="flex justify-center gap-3 mb-10 mt-8">
+                    <button
+                        onClick={() => setFilterTab('all')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all border ${
+                            filterTab === 'all'
+                                ? 'bg-[#1A1A1A] text-white border-[#1A1A1A] shadow-md'
+                                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:shadow-sm hover:text-gray-800'
+                        }`}
+                    >
+                        All Tools
+                    </button>
+                    <button
+                        onClick={() => setFilterTab('bookmarked')}
+                        className={`flex items-center gap-2 px-5 py-2.5 rounded-full text-sm font-bold transition-all border ${
+                            filterTab === 'bookmarked'
+                                ? 'bg-[#7C3AED] text-white border-[#7C3AED] shadow-md'
+                                : 'bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:shadow-sm hover:text-gray-800'
+                        }`}
+                    >
+                        ⭐ Bookmarked
+                    </button>
+                </div>
+
                 {/* Content Area */}
                 <div className="min-h-[400px]">
                     {loading ? (
@@ -127,7 +176,11 @@ const AITools: React.FC = () => {
                             <p className="text-gray-400 text-lg font-medium">No tactical protocols found in this segment.</p>
                         </div>
                     ) : (
-                        <AIToolGrid tools={filteredTools} />
+                        <AIToolGrid 
+                            tools={filteredTools} 
+                            bookmarkedTools={bookmarkedTools} 
+                            onToggleBookmark={handleToggleBookmark} 
+                        />
                     )}
                 </div>
 

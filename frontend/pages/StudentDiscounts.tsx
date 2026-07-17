@@ -2,12 +2,13 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Code, BrainCircuit, Cloud, PenTool, CheckSquare, GraduationCap, 
-  Music, Search, Tag, ExternalLink, ArrowLeft, Terminal, ShieldCheck 
+  Music, Search, Tag, ExternalLink, ArrowLeft, Terminal, ShieldCheck, Share2, Check, Bookmark 
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const discountCategories = [
   { id: 'all', label: 'All Discounts', icon: Tag },
+  { id: 'bookmarked', label: 'Bookmarked', icon: Bookmark },
   { id: 'software', label: 'Software & Dev', icon: Code },
   { id: 'ai', label: 'AI Tools', icon: BrainCircuit },
   { id: 'cloud', label: 'Cloud Credits', icon: Cloud },
@@ -428,18 +429,54 @@ const allDiscounts = [
 const StudentDiscounts: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [copiedDiscountId, setCopiedDiscountId] = useState<number | null>(null);
+  const [bookmarkedDiscountIds, setBookmarkedDiscountIds] = useState<number[]>([]);
+
+  React.useEffect(() => {
+    const saved = localStorage.getItem('studlyf_bookmarked_discounts');
+    if (saved) {
+      try {
+        setBookmarkedDiscountIds(JSON.parse(saved));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  const handleToggleBookmark = (id: number) => {
+    setBookmarkedDiscountIds(prev => {
+      const updated = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('studlyf_bookmarked_discounts', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   const filteredDiscounts = useMemo(() => {
     return allDiscounts.filter(d => {
-      const matchesCategory = activeCategory === 'all' || d.categoryId === activeCategory;
+      const matchesCategory = activeCategory === 'all' 
+        ? true 
+        : activeCategory === 'bookmarked'
+          ? bookmarkedDiscountIds.includes(d.id)
+          : d.categoryId === activeCategory;
       const matchesSearch = d.brand.toLowerCase().includes(searchQuery.toLowerCase()) || 
                             d.benefit.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;
     });
-  }, [activeCategory, searchQuery]);
+  }, [activeCategory, searchQuery, bookmarkedDiscountIds]);
 
   const handleLinkClick = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleShare = async (e: React.MouseEvent, url: string, id: number) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedDiscountId(id);
+      setTimeout(() => setCopiedDiscountId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy: ', err);
+    }
   };
 
   return (
@@ -519,8 +556,31 @@ const StudentDiscounts: React.FC = () => {
                   <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${discount.bg} group-hover:scale-110 transition-transform duration-300 shrink-0 shadow-sm`}>
                     <discount.icon className={`w-6 h-6 ${discount.color}`} />
                   </div>
-                  <div className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${discount.color} ${discount.bg} border border-transparent group-hover:border-current transition-colors`}>
-                    {discount.discount}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleToggleBookmark(discount.id);
+                      }}
+                      className="p-1.5 bg-[#F8F9FC] hover:bg-gray-100 text-gray-400 hover:text-amber-500 rounded-lg border border-gray-100 hover:border-gray-200 flex items-center justify-center transition-all duration-200"
+                      title={bookmarkedDiscountIds.includes(discount.id) ? "Remove Bookmark" : "Bookmark Discount"}
+                    >
+                      <Bookmark className={`w-3.5 h-3.5 ${bookmarkedDiscountIds.includes(discount.id) ? "fill-amber-400 text-amber-400" : ""}`} />
+                    </button>
+                    <button
+                      onClick={(e) => handleShare(e, discount.link, discount.id)}
+                      className="p-1.5 bg-[#F8F9FC] hover:bg-gray-100 text-gray-400 hover:text-[#6C2BFF] rounded-lg border border-gray-100 hover:border-gray-200 flex items-center justify-center transition-all duration-200"
+                      title="Share Discount"
+                    >
+                      {copiedDiscountId === discount.id ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-500" />
+                      ) : (
+                        <Share2 className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <div className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest ${discount.color} ${discount.bg} border border-transparent group-hover:border-current transition-colors`}>
+                      {discount.discount}
+                    </div>
                   </div>
                 </div>
 

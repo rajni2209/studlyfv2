@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { GraduationCap, Landmark, Rocket, ArrowLeft, Target, Briefcase, ExternalLink, Code, Lightbulb, Users, Cloud } from 'lucide-react';
+import { GraduationCap, Landmark, Rocket, ArrowLeft, Target, Briefcase, ExternalLink, Code, Lightbulb, Users, Cloud, Share2, Check, Bookmark } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 const schemeCategories = [
   { id: 'all', label: 'All Schemes', icon: Target },
+  { id: 'bookmarked', label: 'Bookmarked', icon: Bookmark },
   { id: 'scholarships', label: 'Scholarships', icon: GraduationCap },
   { id: 'internships', label: 'Internships', icon: Briefcase },
   { id: 'support', label: 'Education Support', icon: Landmark },
@@ -172,13 +173,47 @@ const allSchemes = [
 
 const StudentSchemes: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState('all');
+  const [copiedSchemeId, setCopiedSchemeId] = useState<number | null>(null);
+  const [bookmarkedSchemeIds, setBookmarkedSchemeIds] = useState<number[]>([]);
+
+  React.useEffect(() => {
+    const saved = localStorage.getItem('studlyf_bookmarked_schemes');
+    if (saved) {
+      try {
+        setBookmarkedSchemeIds(JSON.parse(saved));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
+
+  const handleToggleBookmark = (id: number) => {
+    setBookmarkedSchemeIds(prev => {
+      const updated = prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id];
+      localStorage.setItem('studlyf_bookmarked_schemes', JSON.stringify(updated));
+      return updated;
+    });
+  };
 
   const filteredSchemes = activeCategory === 'all' 
     ? allSchemes 
-    : allSchemes.filter(s => s.categoryId === activeCategory);
+    : activeCategory === 'bookmarked'
+      ? allSchemes.filter(s => bookmarkedSchemeIds.includes(s.id))
+      : allSchemes.filter(s => s.categoryId === activeCategory);
 
   const handleLinkClick = (url: string) => {
     window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  const handleShare = async (e: React.MouseEvent, url: string, id: number) => {
+    e.stopPropagation();
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedSchemeId(id);
+      setTimeout(() => setCopiedSchemeId(null), 2000);
+    } catch (err) {
+      console.error('Failed to copy: ', err);
+    }
   };
 
   return (
@@ -242,8 +277,29 @@ const StudentSchemes: React.FC = () => {
                 onClick={() => handleLinkClick(scheme.link)}
                 className="bg-white border border-gray-200 rounded-[2rem] p-8 hover:shadow-[0_20px_40px_rgba(0,0,0,0.06)] hover:-translate-y-1 hover:border-[#EC4899]/30 transition-all duration-300 group flex flex-col h-full cursor-pointer relative overflow-hidden"
               >
-                {/* Category Badge */}
-                <div className="absolute top-6 right-6">
+                {/* Category Badge & Share & Bookmark */}
+                <div className="absolute top-6 right-6 flex items-center gap-2 z-10">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleBookmark(scheme.id);
+                    }}
+                    className="p-1.5 bg-[#F8F9FC] hover:bg-gray-100 text-gray-400 hover:text-amber-500 rounded-lg border border-gray-100 hover:border-gray-200 flex items-center justify-center transition-all duration-200"
+                    title={bookmarkedSchemeIds.includes(scheme.id) ? "Remove Bookmark" : "Bookmark Scheme"}
+                  >
+                    <Bookmark className={`w-3.5 h-3.5 ${bookmarkedSchemeIds.includes(scheme.id) ? "fill-amber-400 text-amber-400" : ""}`} />
+                  </button>
+                  <button
+                    onClick={(e) => handleShare(e, scheme.link, scheme.id)}
+                    className="p-1.5 bg-[#F8F9FC] hover:bg-gray-100 text-gray-400 hover:text-[#EC4899] rounded-lg border border-gray-100 hover:border-gray-200 flex items-center justify-center transition-all duration-200"
+                    title="Share Scheme"
+                  >
+                    {copiedSchemeId === scheme.id ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-500" />
+                    ) : (
+                      <Share2 className="w-3.5 h-3.5" />
+                    )}
+                  </button>
                   <span className={`text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full border border-gray-100 ${scheme.color} ${scheme.bg}`}>
                     {schemeCategories.find(c => c.id === scheme.categoryId)?.label}
                   </span>

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { ExternalLink } from 'lucide-react';
+import { ExternalLink, Share2, Check, Bookmark } from 'lucide-react';
 
 interface Tool {
     name: string;
@@ -10,14 +10,28 @@ interface Tool {
     url: string;
 }
 
-const AIToolCard: React.FC<{ tool: Tool }> = ({ tool }) => {
+const AIToolCard: React.FC<{ tool: Tool; isBookmarked: boolean; onToggleBookmark: () => void }> = ({ tool, isBookmarked, onToggleBookmark }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleShare = async (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+            await navigator.clipboard.writeText(tool.url);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 2000);
+        } catch (err) {
+            console.error('Failed to copy link: ', err);
+        }
+    };
+
     return (
         <motion.div
             whileHover={{ y: -8, scale: 1.02 }}
             transition={{ duration: 0.25, ease: "easeOut" }}
             className="group bg-white border border-gray-100 rounded-[1.5rem] p-6 flex flex-col h-full relative overflow-hidden hover:border-[#7C3AED]/20 hover:shadow-[0_20px_40px_rgba(124,58,237,0.08)] transition-all"
         >
-            {/* Category Badge */}
+            {/* Category Badge & Share */}
             <div className="flex justify-between items-start mb-6">
                 <div className="w-14 h-14 rounded-2xl bg-[#F9FAFB] border border-gray-100 p-2 flex items-center justify-center overflow-hidden group-hover:border-[#7C3AED]/20 transition-colors">
                     <img
@@ -27,9 +41,29 @@ const AIToolCard: React.FC<{ tool: Tool }> = ({ tool }) => {
                         onError={(e) => { (e.target as HTMLImageElement).src = 'https://via.placeholder.com/150?text=AI'; }}
                     />
                 </div>
-                <span className="px-3 py-1 bg-[#F5F3FF] text-[#7C3AED] text-[10px] uppercase font-black tracking-widest rounded-full border border-[#7C3AED]/10">
-                    {tool.category}
-                </span>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            onToggleBookmark();
+                        }}
+                        className="p-1.5 bg-[#F9FAFB] hover:bg-gray-100 text-gray-400 hover:text-amber-500 rounded-lg border border-gray-100 hover:border-gray-200 flex items-center justify-center transition-all duration-200"
+                        title={isBookmarked ? "Remove Bookmark" : "Bookmark Tool"}
+                    >
+                        <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? "fill-amber-400 text-amber-400" : ""}`} />
+                    </button>
+                    <button
+                        onClick={handleShare}
+                        className="p-1.5 bg-[#F9FAFB] hover:bg-gray-100 text-gray-400 hover:text-[#7C3AED] rounded-lg border border-gray-100 hover:border-gray-200 flex items-center justify-center transition-all duration-200"
+                        title="Share Tool"
+                    >
+                        {copied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Share2 className="w-3.5 h-3.5" />}
+                    </button>
+                    <span className="px-3 py-1 bg-[#F5F3FF] text-[#7C3AED] text-[10px] uppercase font-black tracking-widest rounded-full border border-[#7C3AED]/10">
+                        {tool.category}
+                    </span>
+                </div>
             </div>
 
             <div className="flex-grow">

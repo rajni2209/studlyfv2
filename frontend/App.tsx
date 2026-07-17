@@ -70,6 +70,7 @@ const StudOTT = lazy(() => import('./pages/StudOTT'));
 const StudHub = lazy(() => import('./pages/StudHub'));
 const StudentDiscounts = lazy(() => import('./pages/StudentDiscounts'));
 const StudentSchemes = lazy(() => import('./pages/StudentSchemes'));
+const Scholarships = lazy(() => import('./pages/Scholarships'));
 const FeaturePreview = lazy(() => import('./pages/FeaturePreview'));
 const InstitutionDashboard = lazy(() => import('./pages/institution-dashboard/InstitutionDashboard'));
 const AchievementRegistry = lazy(() => import('./pages/institution-dashboard/AchievementRegistry'));
@@ -452,6 +453,7 @@ const App: React.FC = () => {
             <Route path="/studhub" element={<StudHub />} />
             <Route path="/student-discounts" element={<StudentDiscounts />} />
             <Route path="/student-schemes" element={<StudentSchemes />} />
+            <Route path="/scholarships" element={<Scholarships />} />
             <Route path="/verify/:id" element={<CertificateVerification />} />
             <Route path="/fix-role" element={<RoleFixer />} />
             <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
